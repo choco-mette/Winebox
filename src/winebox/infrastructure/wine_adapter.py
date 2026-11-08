@@ -49,3 +49,4 @@ class WineAdapter:
     @classmethod
     def build_wineserver_kill_cmd(cls, runner: Optional[Runner] = None) -> List[str]:
         return [cls.get_wineserver_cmd(runner), "-k"]
+

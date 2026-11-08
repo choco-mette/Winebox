@@ -54,3 +54,4 @@ class BwrapAdapter:
             inherit_stdio=inherit_stdio,
             timeout=timeout,
         )
+

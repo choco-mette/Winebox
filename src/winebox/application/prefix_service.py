@@ -90,3 +90,4 @@ class PrefixService:
         p_dir = self.repo.get_prefix_dir(prefix_id)
         with prefix_lock(p_dir):
             self.repo.delete_prefix(prefix_id)
+

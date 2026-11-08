@@ -97,3 +97,4 @@ class InstallService:
 
             # Find newly installed executables
             return self.scan_for_executables(prefix_inner)
+

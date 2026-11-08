@@ -41,3 +41,4 @@ class AppService:
 
     def remove_app(self, app_id: str) -> None:
         self.repo.delete_app(app_id)
+

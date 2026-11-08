@@ -47,3 +47,4 @@ class FilesystemAdapter:
             path.unlink()
         else:
             shutil.rmtree(path)
+

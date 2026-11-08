@@ -102,3 +102,4 @@ class PrefixAuditor:
                 warnings.append("Notice: 'system.reg' not yet created (prefix may be uninitialized)")
 
         return warnings
+
