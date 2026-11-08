@@ -25,13 +25,22 @@ class WineAdapter:
         return [cls.get_wine_cmd(runner), "wineboot", "-u"]
 
     @classmethod
+    def normalize_exe_path(cls, exe_path: str) -> str:
+        """Converts relative drive_c paths to Windows drive paths."""
+        cleaned = exe_path.replace("/", "\\")
+        if cleaned.lower().startswith("drive_c\\"):
+            return "C:\\" + cleaned[8:]
+        return exe_path
+
+    @classmethod
     def build_run_cmd(
         cls,
         exe_path: str,
         args: Optional[List[str]] = None,
         runner: Optional[Runner] = None,
     ) -> List[str]:
-        cmd = [cls.get_wine_cmd(runner), exe_path]
+        target_exe = cls.normalize_exe_path(exe_path)
+        cmd = [cls.get_wine_cmd(runner), target_exe]
         if args:
             cmd.extend(args)
         return cmd
