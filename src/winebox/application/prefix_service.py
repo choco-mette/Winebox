@@ -29,6 +29,7 @@ class PrefixService:
         name: Optional[str] = None,
         runner_id: str = "system-wine",
         initialize_wineboot: bool = True,
+        allow_network: bool = True,
     ) -> Prefix:
         """Creates a new isolated Wine prefix and runs initial wineboot inside sandbox."""
         p_dir = self.repo.get_prefix_dir(prefix_id)
@@ -54,10 +55,11 @@ class PrefixService:
         if initialize_wineboot:
             with prefix_lock(p_dir):
                 runner = self.repo.load_runner(runner_id)
+                policy = SecurityPolicy(network=allow_network)
                 builder = MountBuilder(
                     prefix_path=prefix_inner,
                     isolated_home_path=home_inner,
-                    policy=SecurityPolicy(network=False),
+                    policy=policy,
                     custom_runner_dir=runner.wine_bin.parent.parent if not runner.is_system else None,
                 )
                 bwrap_args = builder.build_bwrap_args()

@@ -114,6 +114,7 @@ def prefix_create(
     name: Optional[str] = typer.Option(None, "--name", "-n", help="Display name"),
     runner_id: str = typer.Option("system-wine", "--runner", "-r", help="Runner ID to use"),
     init_wine: bool = typer.Option(True, "--wineboot/--no-wineboot", help="Run wineboot inside sandbox"),
+    network: bool = typer.Option(True, "--network/--no-network", help="Allow network access during wineboot (e.g. for Gecko/Mono)"),
 ) -> None:
     """Create a new isolated Wine prefix and run initial sandboxed wineboot."""
     svc = PrefixService()
@@ -124,6 +125,7 @@ def prefix_create(
                 name=name,
                 runner_id=runner_id,
                 initialize_wineboot=init_wine,
+                allow_network=network,
             )
             console.print(
                 f"[bold green]✓[/bold green] Prefix '[bold cyan]{prefix.id}[/bold cyan]' created successfully."

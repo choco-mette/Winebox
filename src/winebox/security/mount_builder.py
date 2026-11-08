@@ -51,6 +51,9 @@ class MountBuilder:
             "--ro-bind-try", "/etc/hosts", "/etc/hosts",
             "--ro-bind-try", "/etc/nsswitch.conf", "/etc/nsswitch.conf",
             "--ro-bind-try", "/etc/fonts", "/etc/fonts",
+            "--ro-bind-try", "/etc/ssl", "/etc/ssl",
+            "--ro-bind-try", "/etc/pki", "/etc/pki",
+            "--ro-bind-try", "/etc/ca-certificates", "/etc/ca-certificates",
             "--setenv", "PATH", os.environ.get("PATH", "/usr/bin:/bin"),
         ]
 
