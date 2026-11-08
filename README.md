@@ -34,7 +34,24 @@ pip install -e .
 
 ## Panduan Penggunaan CLI
 
-### 1. Diagnosa Kesiapan Sistem (`doctor`)
+### 1. Bantuan Perintah (`help`)
+Tampilkan panduan dan opsi perintah kapan saja:
+```bash
+# Menampilkan bantuan umum & daftar seluruh perintah
+winebox help
+
+# Menampilkan bantuan terperinci per sub-perintah
+winebox help prefix
+winebox help app
+winebox help install
+winebox help import
+winebox help runner
+winebox help system
+```
+
+---
+
+### 2. Diagnosa Kesiapan Sistem (`doctor`)
 Periksa kesiapan dependensi sistem (bwrap, wine, userns, display, audio, GPU):
 ```bash
 winebox system doctor
@@ -43,7 +60,7 @@ Jika ada kendala (misal user namespaces dibatasi), doctor memberikan rekomendasi
 
 ---
 
-### 2. Mengelola Wine Prefix
+### 3. Mengelola Wine Prefix
 Wine Prefix adalah lingkungan Windows virtual terisolasi. WineBox mengisolasi direktori `$HOME` host dan membuat virtual HOME privat per prefix.
 
 ```bash
@@ -65,7 +82,7 @@ winebox prefix remove gaming
 
 ---
 
-### 3. Memasang Aplikasi Windows (`install`)
+### 4. Memasang Aplikasi Windows (`install`)
 Jalankan wizard instalasi interaktif untuk file installer `.exe` atau `.msi`:
 ```bash
 winebox install /path/to/installer.exe
@@ -79,7 +96,7 @@ Wizard akan:
 
 ---
 
-### 4. Menjalankan & Mengelola Aplikasi (`app`)
+### 5. Menjalankan & Mengelola Aplikasi (`app`)
 
 ```bash
 # Menjalankan aplikasi Windows di dalam sandbox
@@ -107,7 +124,7 @@ winebox app remove notepad
 
 ---
 
-### 5. Mengimpor Aplikasi Portable (`import app`)
+### 6. Mengimpor Aplikasi Portable (`import app`)
 Salin folder aplikasi portable Windows ke dalam prefix tanpa perlu installer:
 ```bash
 winebox import app /path/to/portable_folder \
@@ -123,7 +140,7 @@ WineBox akan:
 
 ---
 
-### 6. Mengimpor Wine Prefix Eksternal (`import prefix`)
+### 7. Mengimpor Wine Prefix Eksternal (`import prefix`)
 Migrasi prefix lama (dari Lutris, Bottles, atau Wine manual) ke lingkungan aman WineBox:
 ```bash
 winebox import prefix /path/to/old_prefix \
@@ -137,7 +154,7 @@ WineBox secara otomatis:
 
 ---
 
-### 7. Mengelola Runner Wine (`runner`)
+### 8. Mengelola Runner Wine (`runner`)
 
 ```bash
 # Melihat daftar runner yang tersedia (System Wine default)
