@@ -64,3 +64,4 @@ sequenceDiagram
 4. Prefix Audit: Jalankan `PrefixAuditor` untuk memverifikasi kepatuhan keamanan.
 5. Pindahkan secara atomik ke `prefixes/<prefix_id>/prefix/`.
 6. Inisialisasi struktur WineBox: Buat direktori pendukung (`home/`, `logs/`, `config.toml`).
+

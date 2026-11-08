@@ -62,3 +62,4 @@ WineBox tidak bertujuan untuk:
 - Filtering jaringan berbasis domain/proxy lokal (Restricted network).
 - Penyimpanan multi-tenant sistem (`/var/lib/winebox`).
 - Paket native OS distro (`.deb`, `.rpm`, Flatpak bundle).
+

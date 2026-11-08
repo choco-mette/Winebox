@@ -45,3 +45,4 @@ Batas keamanan WineBox ditegakkan oleh kombinasi:
 
 - **X11 Keylogger Risk:** Karena MVP menggunakan passthrough socket X11 standar host (demi performa dan kesederhanaan tanpa nested X server), aplikasi yang memiliki izin `display = true` pada sesi X11 host secara teoritis dapat merekam keystroke sesi X11. Pengguna disarankan menggunakan sesi Wayland (XWayland) untuk mitigasi alami.
 - **Kernel Exploits:** Sandbox Bubblewrap tidak dapat melindungi host jika aplikasi Windows memicu exploit 0-day pada subsistem kernel Linux (seperti driver GPU proprietary atau kernel bug).
+

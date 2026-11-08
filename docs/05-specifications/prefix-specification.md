@@ -62,3 +62,4 @@ Untuk mencegah korupsi registry akibat beberapa instance Wine yang berebut daemo
 - **Dosdevices:** Memeriksa folder `dosdevices/`. Menjamin tidak ada symlink yang mengarah langsung ke `/` atau `$HOME` host.
 - **Symlink Check:** Memastikan semua symlink di dalam `drive_c/` tidak menyelesaikan path di luar `prefixes/<prefix-id>/`.
 - **Registry Check:** Memastikan file `system.reg` dan `user.reg` dapat dibaca dan valid secara struktural.
+

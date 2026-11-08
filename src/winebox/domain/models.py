@@ -76,3 +76,4 @@ class Runner:
     wine_bin: Path
     wineserver_bin: Optional[Path] = None
     is_system: bool = True
+

@@ -13,3 +13,4 @@ Alur rilis dan versioning WineBox:
    - Semua ADR disinkronkan statusnya.
    - Semua test unit dan integrasi lulus 100%.
    - `winebox system doctor` berfungsi pada lingkungan bersih.
+

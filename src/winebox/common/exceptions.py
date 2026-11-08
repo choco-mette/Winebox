@@ -34,3 +34,4 @@ class ExecutionError(WineboxError):
 class ResourceNotFoundError(WineboxError):
     """Raised when an application, prefix, or runner is not found."""
     pass
+

@@ -40,3 +40,4 @@ created_at = "2026-11-08T19:30:00Z"
 - Untuk **Custom Runner**:
   - Direktori induk runner di-mount secara read-only ke path yang terisolasi di dalam container (misalnya `/app/runner`).
   - Variabel `PATH` dan `LD_LIBRARY_PATH` sandbox diperbarui agar mengutamakan biner custom runner.
+

@@ -87,3 +87,4 @@ flowchart TB
   - `FilesystemAdapter`: Operasi file atomik, staging clone, dan scanning symlink.
   - `ProcessManager`: Penguncian `prefix.lock` via `fcntl.flock`, monitoring PID namespace.
   - `ConfigRepository`: Serialisasi dan deserialisasi file konfigurasi TOML.
+

@@ -32,3 +32,4 @@ Winebox/
 ├── README.md                   # Dokumentasi umum proyek
 └── .gitignore                  # Filter berkas Git
 ```
+

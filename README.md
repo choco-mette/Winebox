@@ -26,3 +26,4 @@ Keputusan arsitektur (ADR): [docs/03-decisions/adr/](docs/03-decisions/adr/)
 
 ## Lisensi
 MIT
+

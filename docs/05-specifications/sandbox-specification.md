@@ -81,3 +81,4 @@ Sebelum mengeksekusi container aplikasi, `BwrapAdapter` menjalankan uji dummy:
 bwrap --unshare-user --ro-bind / / true
 ```
 Jika return code != 0 (misalnya akibat unprivileged user namespace dinonaktifkan di level kernel), eksekusi dibatalkan seketika dengan pesan error yang merujuk ke perintah `winebox system doctor`.
+

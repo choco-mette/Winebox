@@ -18,3 +18,4 @@ Strategi pengujian WineBox untuk memastikan keamanan dan stabilitas.
 ## 2. Mocking Policy
 - Operasi eksekusi Wine yang memakan waktu lama (seperti `wineboot` atau menjalankan installer GUI) wajib di-mock saat CI testing.
 - Unit test tidak boleh bergantung pada ketersediaan Wine atau display X11 host.
+

@@ -1,0 +1,75 @@
+"""Execution service for launching sandboxed applications."""
+
+import subprocess
+from pathlib import Path
+from typing import List, Optional
+from winebox.common.exceptions import ResourceNotFoundError
+from winebox.domain.models import Application
+from winebox.infrastructure.bwrap_adapter import BwrapAdapter
+from winebox.infrastructure.config_repository import ConfigRepository
+from winebox.infrastructure.process_manager import prefix_lock
+from winebox.infrastructure.wine_adapter import WineAdapter
+from winebox.security.auditor import PrefixAuditor
+from winebox.security.mount_builder import MountBuilder
+from winebox.security.validator import PolicyValidator
+
+
+class ExecutionService:
+    """Orchestrates security validation and sandboxed process execution."""
+
+    def __init__(
+        self,
+        repo: Optional[ConfigRepository] = None,
+        bwrap_adapter: Optional[BwrapAdapter] = None,
+        validator: Optional[PolicyValidator] = None,
+    ) -> None:
+        self.repo = repo or ConfigRepository()
+        self.bwrap_adapter = bwrap_adapter or BwrapAdapter()
+        self.validator = validator or PolicyValidator()
+
+    def run_app(
+        self,
+        app_id: str,
+        extra_args: Optional[List[str]] = None,
+        inherit_stdio: bool = True,
+    ) -> subprocess.CompletedProcess:
+        """Executes an application inside Bubblewrap sandbox with prefix locking."""
+        app = self.repo.load_app(app_id)
+        prefix = self.repo.load_prefix(app.prefix_id)
+        runner = self.repo.load_runner(app.runner_id)
+
+        p_dir = self.repo.get_prefix_dir(prefix.id)
+        prefix_inner = p_dir / "prefix"
+        home_inner = p_dir / "home"
+
+        # Validate security policy (ADR-017)
+        self.validator.validate_policy(app.policy)
+
+        with prefix_lock(p_dir):
+            # Audit prefix before execution (ADR-010)
+            PrefixAuditor.audit_prefix(prefix_inner, check_registry=False)
+
+            # Build sandbox mounts (ADR-012, ADR-013, ADR-014)
+            builder = MountBuilder(
+                prefix_path=prefix_inner,
+                isolated_home_path=home_inner,
+                policy=app.policy,
+                custom_runner_dir=runner.wine_bin.parent.parent if not runner.is_system else None,
+            )
+            bwrap_args = builder.build_bwrap_args()
+
+            combined_args = list(app.arguments)
+            if extra_args:
+                combined_args.extend(extra_args)
+
+            cmd_inside = WineAdapter.build_run_cmd(
+                exe_path=app.exe_path,
+                args=combined_args,
+                runner=runner,
+            )
+
+            return self.bwrap_adapter.execute_in_sandbox(
+                bwrap_args=bwrap_args,
+                command_inside=cmd_inside,
+                inherit_stdio=inherit_stdio,
+            )
