@@ -42,6 +42,7 @@ class BwrapAdapter:
         command_inside: List[str],
         inherit_stdio: bool = True,
         timeout: Optional[float] = None,
+        check: bool = False,
     ) -> subprocess.CompletedProcess:
         """Executes a command inside the Bubblewrap sandbox."""
         self.verify_ready()
@@ -49,9 +50,13 @@ class BwrapAdapter:
         full_command = list(bwrap_args)
         full_command.extend(command_inside)
 
-        return ProcessManager.run_process(
+        res = ProcessManager.run_process(
             command=full_command,
             inherit_stdio=inherit_stdio,
             timeout=timeout,
         )
+        if check and res.returncode != 0:
+            err = res.stderr.strip() if res.stderr else f"Process exited with code {res.returncode}"
+            raise ExecutionError(f"Sandboxed execution failed: {err}")
+        return res
 

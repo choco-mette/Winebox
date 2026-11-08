@@ -43,6 +43,7 @@ class MountBuilder:
             "--ro-bind-try", "/lib", "/lib",
             "--ro-bind-try", "/lib64", "/lib64",
             "--ro-bind-try", "/bin", "/bin",
+            "--ro-bind-try", "/opt", "/opt",
             "--ro-bind", "/etc/ld.so.cache", "/etc/ld.so.cache",
             "--ro-bind-try", "/etc/ld.so.conf", "/etc/ld.so.conf",
             "--ro-bind-try", "/etc/ld.so.conf.d", "/etc/ld.so.conf.d",
@@ -50,7 +51,12 @@ class MountBuilder:
             "--ro-bind-try", "/etc/hosts", "/etc/hosts",
             "--ro-bind-try", "/etc/nsswitch.conf", "/etc/nsswitch.conf",
             "--ro-bind-try", "/etc/fonts", "/etc/fonts",
+            "--setenv", "PATH", os.environ.get("PATH", "/usr/bin:/bin"),
         ]
+
+        # Ensure isolated home mount point exists
+        dot_wine = self.isolated_home_path / ".wine"
+        dot_wine.mkdir(parents=True, exist_ok=True)
 
         # Network policy (ADR-014)
         if self.policy.network:

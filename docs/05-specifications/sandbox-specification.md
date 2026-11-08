@@ -23,6 +23,7 @@ bwrap \
   --ro-bind-try /lib /lib \
   --ro-bind-try /lib64 /lib64 \
   --ro-bind-try /bin /bin \
+  --ro-bind-try /opt /opt \
   --ro-bind /etc/ld.so.cache /etc/ld.so.cache \
   --ro-bind-try /etc/ld.so.conf /etc/ld.so.conf \
   --ro-bind-try /etc/ld.so.conf.d /etc/ld.so.conf.d \
