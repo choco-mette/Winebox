@@ -41,6 +41,29 @@ app.add_typer(import_app, name="import")
 console = Console()
 
 
+@app.command("help")
+def show_help(
+    ctx: typer.Context,
+    command_name: Optional[str] = typer.Argument(None, help="Command or topic to get help for"),
+) -> None:
+    """Show help for WineBox or a specific command."""
+    root_ctx = ctx.find_root()
+    root_cmd = root_ctx.command
+
+    if not command_name:
+        console.print(root_cmd.get_help(root_ctx))
+        return
+
+    sub_cmd = root_cmd.get_command(root_ctx, command_name)
+    if sub_cmd:
+        sub_ctx = typer.Context(sub_cmd, parent=root_ctx, info_name=command_name)
+        console.print(sub_cmd.get_help(sub_ctx))
+    else:
+        console.print(f"[bold red]Unknown command or topic:[/bold red] '{command_name}'.\n")
+        console.print(root_cmd.get_help(root_ctx))
+        raise typer.Exit(code=1)
+
+
 # ---------------- System Commands ----------------
 @system_app.command("doctor")
 def system_doctor() -> None:
