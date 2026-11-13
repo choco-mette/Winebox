@@ -142,6 +142,7 @@ def prefix_create(
     prefix_id: str = typer.Argument(..., help="Unique identifier for the prefix"),
     name: Optional[str] = typer.Option(None, "--name", "-n", help="Display name"),
     runner_id: str = typer.Option("system-wine", "--runner", "-r", help="Runner ID to use"),
+    profile_id: str = typer.Option("permissive", "--profile", help="Default security profile (permissive/balanced/zero-trust/paranoid)"),
     init_wine: bool = typer.Option(True, "--wineboot/--no-wineboot", help="Run wineboot inside sandbox"),
     network: bool = typer.Option(True, "--network/--no-network", help="Allow network access during wineboot (e.g. for Gecko/Mono)"),
 ) -> None:
@@ -153,6 +154,7 @@ def prefix_create(
                 prefix_id=prefix_id,
                 name=name,
                 runner_id=runner_id,
+                default_profile_id=profile_id,
                 initialize_wineboot=init_wine,
                 allow_network=network,
             )
@@ -397,6 +399,7 @@ def import_portable_app(
     app_id: str = typer.Option(..., "--id", "-i", help="Application ID"),
     name: str = typer.Option(..., "--name", "-n", help="Application display name"),
     exe: str = typer.Option(..., "--exe", "-e", help="Relative executable name inside folder"),
+    profile_id: str = typer.Option("permissive", "--profile", help="Security profile ID"),
 ) -> None:
     """Import a portable Windows application folder into a Wine prefix."""
     svc = ImportService()
@@ -408,6 +411,7 @@ def import_portable_app(
                 app_id=app_id,
                 name=name,
                 exe_rel_path=exe,
+                profile_id=profile_id,
             )
             console.print(
                 f"[bold green]✓[/bold green] Portable app '[bold cyan]{app_obj.name}[/bold cyan]' imported and registered."

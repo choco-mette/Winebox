@@ -24,6 +24,7 @@ class ImportService:
         name: str,
         exe_rel_path: str,
         runner_id: str = "system-wine",
+        profile_id: str = "permissive",
         policy: Optional[SecurityPolicy] = None,
     ) -> Application:
         """Imports portable app folder via staging directly into the prefix (ADR-008 & ADR-009)."""
@@ -65,6 +66,7 @@ class ImportService:
             prefix_id=prefix_id,
             exe_path=full_rel_exe,
             runner_id=runner_id,
+            profile_id=profile_id,
             policy=policy or SecurityPolicy(),
         )
         self.repo.save_app(app)
