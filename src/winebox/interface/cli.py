@@ -14,6 +14,7 @@ from winebox.application.app_service import AppService
 from winebox.application.execution_service import ExecutionService
 from winebox.application.import_service import ImportService
 from winebox.application.install_service import InstallService
+from winebox.application.lutris_service import LutrisService
 from winebox.application.prefix_service import PrefixService
 from winebox.application.profile_service import ProfileService
 from winebox.application.runner_service import RunnerService
@@ -21,6 +22,7 @@ from winebox.common.doctor import SystemDoctor
 from winebox.common.exceptions import WineboxError
 from winebox.domain.models import HostMount, MountMode, SecurityPolicy
 from winebox.infrastructure.log_manager import LogManager
+from winebox.infrastructure.lutris_adapter import LutrisAdapter
 from winebox.infrastructure.sqlite_repository import SqliteRepository
 from winebox.interface.tui import slugify, tui_browse_directory, tui_browse_file, tui_select
 
@@ -36,6 +38,7 @@ runner_app = typer.Typer(help="Manage system and custom Wine runners.")
 system_app = typer.Typer(help="Host system diagnostics and version info.")
 import_app = typer.Typer(help="Import portable applications and external prefixes.")
 profile_app = typer.Typer(help="Manage security profiles and permissions (ADR-020).")
+lutris_app = typer.Typer(help="Export and integrate WineBox apps with Lutris GUI (ADR-022).")
 
 app.add_typer(prefix_app, name="prefix")
 app.add_typer(app_app, name="app")
@@ -43,6 +46,7 @@ app.add_typer(runner_app, name="runner")
 app.add_typer(system_app, name="system")
 app.add_typer(import_app, name="import")
 app.add_typer(profile_app, name="profile")
+app.add_typer(lutris_app, name="lutris")
 
 console = Console()
 
@@ -623,8 +627,60 @@ def add_wizard(
                         border_style="green",
                     )
                 )
+
+        # Step 6: Optional Lutris Integration (ADR-022)
+        if (mode == "portable" or chosen_exe != "__skip__") and LutrisAdapter.find_lutris_binary():
+            lutris_choice = tui_select(
+                "Tambahkan Game ke Lutris Library?",
+                [
+                    ("yes", "Ya — Buka installer Lutris (lutris --install)"),
+                    ("no", "Tidak — Cukup di WineBox saja"),
+                ],
+                default_index=0,
+            )
+            if lutris_choice == "yes":
+                lutris_svc = LutrisService()
+                yaml_file = lutris_svc.export_app_to_lutris(app_id, launch_lutris=True)
+                console.print(
+                    f"[bold green]✓[/bold green] Script Lutris dibuat ([dim]{yaml_file}[/dim]). "
+                    "Silakan klik [bold cyan]Install[/bold cyan] pada jendela Lutris yang muncul."
+                )
     except WineboxError as e:
         console.print(f"[bold red]Setup Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+
+# ---------------- Lutris Integration Commands (ADR-022) ----------------
+@lutris_app.command("add")
+def lutris_add(
+    app_id: Optional[str] = typer.Argument(None, help="Application ID to export to Lutris (interactive if omitted)"),
+    launch: bool = typer.Option(True, "--launch/--no-launch", help="Launch 'lutris --install' automatically"),
+) -> None:
+    """Generate an official Lutris installer YAML for a WineBox app and open Lutris to install it."""
+    app_svc = AppService()
+    apps = app_svc.list_apps()
+    if not apps:
+        console.print("[yellow]Belum ada aplikasi yang terdaftar di WineBox. Jalankan 'winebox add' terlebih dahulu.[/yellow]")
+        raise typer.Exit(code=1)
+
+    target_app_id = app_id
+    if not target_app_id:
+        options = [(a.id, f"{a.name} ({a.id}) [Prefix: {a.prefix_id}, Profile: {a.profile_id}]") for a in apps]
+        target_app_id = tui_select("Pilih Game / Aplikasi untuk Ditambahkan ke Lutris", options, default_index=0)
+
+    lutris_svc = LutrisService()
+    try:
+        yaml_path = lutris_svc.export_app_to_lutris(target_app_id, launch_lutris=launch)
+        console.print(f"[bold green]✓[/bold green] File installer Lutris dibuat: [cyan]{yaml_path}[/cyan]")
+        if launch:
+            console.print(
+                "[bold green]✓[/bold green] Jendela instalasi Lutris telah dipanggil! "
+                "Klik [bold cyan]Install[/bold cyan] di Lutris untuk menyimpan ke Library."
+            )
+        else:
+            console.print(f"Jalankan manual dengan: [bold yellow]lutris --install \"{yaml_path}\"[/bold yellow]")
+    except WineboxError as e:
+        console.print(f"[bold red]Lutris Error:[/bold red] {e}")
         raise typer.Exit(code=1)
 
 
