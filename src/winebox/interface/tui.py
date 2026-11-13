@@ -434,3 +434,4 @@ def tui_browse_file(
 
     console.print(f"[bold green]✔[/bold green] [bold]{title}:[/bold] [cyan]{chosen}[/cyan]")
     return chosen
+
