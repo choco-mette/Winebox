@@ -1,5 +1,6 @@
 """Execution service for launching sandboxed applications."""
 
+import os
 import subprocess
 from pathlib import Path
 from typing import Any, List, Optional
@@ -51,12 +52,23 @@ class ExecutionService:
             # Audit prefix before execution (ADR-010)
             PrefixAuditor.audit_prefix(prefix_inner, check_registry=False)
 
+            # Compute executable working directory inside sandbox
+            user_name = os.environ.get("USER", "winebox")
+            sandbox_workdir: Optional[str] = None
+            norm_rel = app.exe_path.replace("\\", "/")
+            if norm_rel.lower().startswith("c:/"):
+                norm_rel = "drive_c/" + norm_rel[3:]
+            rel_parent = Path(norm_rel).parent
+            if str(rel_parent) != "." and (prefix_inner / rel_parent).is_dir():
+                sandbox_workdir = f"/home/{user_name}/.wine/{rel_parent.as_posix()}"
+
             # Build sandbox mounts (ADR-012, ADR-013, ADR-014)
             builder = MountBuilder(
                 prefix_path=prefix_inner,
                 isolated_home_path=home_inner,
                 policy=app.policy,
                 custom_runner_dir=runner.wine_bin.parent.parent if not runner.is_system else None,
+                sandbox_workdir=sandbox_workdir,
             )
             bwrap_args = builder.build_bwrap_args()
 

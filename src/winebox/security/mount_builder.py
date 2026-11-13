@@ -15,11 +15,13 @@ class MountBuilder:
         isolated_home_path: Path,
         policy: SecurityPolicy,
         custom_runner_dir: Optional[Path] = None,
+        sandbox_workdir: Optional[str] = None,
     ) -> None:
         self.prefix_path = prefix_path.resolve()
         self.isolated_home_path = isolated_home_path.resolve()
         self.policy = policy
         self.custom_runner_dir = custom_runner_dir.resolve() if custom_runner_dir else None
+        self.sandbox_workdir = sandbox_workdir
 
     def build_bwrap_args(self) -> List[str]:
         """Generates the full list of Bubblewrap CLI arguments."""
@@ -36,6 +38,7 @@ class MountBuilder:
             # Base pseudo filesystems
             "--proc", "/proc",
             "--dev", "/dev",
+            "--ro-bind-try", "/sys", "/sys",
             "--tmpfs", "/tmp",
             "--tmpfs", "/run",
             # Minimal host system runtime (read-only)
@@ -54,6 +57,10 @@ class MountBuilder:
             "--ro-bind-try", "/etc/ssl", "/etc/ssl",
             "--ro-bind-try", "/etc/pki", "/etc/pki",
             "--ro-bind-try", "/etc/ca-certificates", "/etc/ca-certificates",
+            "--ro-bind-try", "/etc/vulkan", "/etc/vulkan",
+            "--ro-bind-try", "/etc/glvnd", "/etc/glvnd",
+            "--ro-bind-try", "/etc/drirc", "/etc/drirc",
+            "--ro-bind-try", "/etc/alternatives", "/etc/alternatives",
             "--setenv", "PATH", os.environ.get("PATH", "/usr/bin:/bin"),
         ]
 
@@ -82,6 +89,14 @@ class MountBuilder:
             "--setenv", "WINEPREFIX", sandbox_prefix,
         ])
 
+        uid = os.getuid()
+        runtime_dir = f"/run/user/{uid}"
+        if self.policy.display or self.policy.audio:
+            args.extend([
+                "--dir", runtime_dir,
+                "--setenv", "XDG_RUNTIME_DIR", runtime_dir,
+            ])
+
         # Hardware: Display (ADR-013)
         if self.policy.display:
             display_var = os.environ.get("DISPLAY")
@@ -90,7 +105,7 @@ class MountBuilder:
                     "--ro-bind-try", "/tmp/.X11-unix", "/tmp/.X11-unix",
                     "--setenv", "DISPLAY", display_var,
                 ])
-                xauth = os.environ.get("XAUTHORITY")
+                xauth = os.environ.get("XAUTHORITY") or str(Path.home() / ".Xauthority")
                 if xauth and Path(xauth).exists():
                     args.extend([
                         "--ro-bind-try", xauth, f"{sandbox_home}/.Xauthority",
@@ -98,23 +113,25 @@ class MountBuilder:
                     ])
             wayland_var = os.environ.get("WAYLAND_DISPLAY")
             if wayland_var:
-                args.append("--setenv")
-                args.append("WAYLAND_DISPLAY")
-                args.append(wayland_var)
+                wayland_sock = Path(f"{runtime_dir}/{wayland_var}")
+                if wayland_sock.exists():
+                    args.extend([
+                        "--ro-bind-try", str(wayland_sock), f"{runtime_dir}/{wayland_var}",
+                        "--setenv", "WAYLAND_DISPLAY", wayland_var,
+                    ])
 
         # Hardware: Audio (ADR-013)
         if self.policy.audio:
-            uid = os.getuid()
-            pulse_dir = Path(f"/run/user/{uid}/pulse")
+            pulse_dir = Path(f"{runtime_dir}/pulse")
             if pulse_dir.exists():
                 args.extend([
-                    "--ro-bind-try", str(pulse_dir), f"/run/user/{uid}/pulse",
-                    "--setenv", "PULSE_SERVER", f"unix:/run/user/{uid}/pulse/native",
+                    "--ro-bind-try", str(pulse_dir), f"{runtime_dir}/pulse",
+                    "--setenv", "PULSE_SERVER", f"unix:{runtime_dir}/pulse/native",
                 ])
-            pipewire_socket = Path(f"/run/user/{uid}/pipewire-0")
+            pipewire_socket = Path(f"{runtime_dir}/pipewire-0")
             if pipewire_socket.exists():
                 args.extend([
-                    "--ro-bind-try", str(pipewire_socket), f"/run/user/{uid}/pipewire-0",
+                    "--ro-bind-try", str(pipewire_socket), f"{runtime_dir}/pipewire-0",
                 ])
 
         # Hardware: GPU (ADR-013)
@@ -143,6 +160,10 @@ class MountBuilder:
         # Custom environment variables
         for k, v in self.policy.env_vars.items():
             args.extend(["--setenv", k, v])
+
+        # Working directory inside sandbox
+        target_workdir = self.sandbox_workdir or sandbox_home
+        args.extend(["--chdir", target_workdir])
 
         return args
 

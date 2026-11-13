@@ -40,7 +40,15 @@ class WineAdapter:
         runner: Optional[Runner] = None,
     ) -> List[str]:
         target_exe = cls.normalize_exe_path(exe_path)
-        cmd = [cls.get_wine_cmd(runner), target_exe]
+        wine_bin = cls.get_wine_cmd(runner)
+        wineserver_bin = cls.get_wineserver_cmd(runner)
+        cmd = [
+            "sh",
+            "-c",
+            f'"{wine_bin}" "$@" ; rc=$? ; "{wineserver_bin}" -w ; exit $rc',
+            "winebox-run",
+            target_exe,
+        ]
         if args:
             cmd.extend(args)
         return cmd
