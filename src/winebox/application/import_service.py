@@ -2,10 +2,10 @@
 
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from winebox.common.exceptions import PrefixAuditError, WineboxError
 from winebox.domain.models import Application, Prefix, PrefixOrigin, PrefixStatus, SecurityPolicy
-from winebox.infrastructure.config_repository import ConfigRepository
+from winebox.infrastructure.sqlite_repository import SqliteRepository
 from winebox.infrastructure.fs_adapter import FilesystemAdapter
 from winebox.security.auditor import PrefixAuditor
 
@@ -13,8 +13,8 @@ from winebox.security.auditor import PrefixAuditor
 class ImportService:
     """Manages cloning, sanitizing, and importing portable apps and external prefixes."""
 
-    def __init__(self, repo: Optional[ConfigRepository] = None) -> None:
-        self.repo = repo or ConfigRepository()
+    def __init__(self, repo: Optional[Any] = None) -> None:
+        self.repo = repo or SqliteRepository()
 
     def import_portable_app(
         self,

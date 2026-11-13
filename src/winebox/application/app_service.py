@@ -1,15 +1,15 @@
 """Application registration and metadata management service."""
 
-from typing import List, Optional
+from typing import Any, List, Optional
 from winebox.domain.models import Application, SecurityPolicy
-from winebox.infrastructure.config_repository import ConfigRepository
+from winebox.infrastructure.sqlite_repository import SqliteRepository
 
 
 class AppService:
     """Manages application registration, inspection, and removal."""
 
-    def __init__(self, repo: Optional[ConfigRepository] = None) -> None:
-        self.repo = repo or ConfigRepository()
+    def __init__(self, repo: Optional[Any] = None) -> None:
+        self.repo = repo or SqliteRepository()
 
     def list_apps(self) -> List[Application]:
         return self.repo.list_apps()
@@ -24,6 +24,7 @@ class AppService:
         prefix_id: str,
         exe_path: str,
         runner_id: str = "system-wine",
+        profile_id: str = "permissive",
         policy: Optional[SecurityPolicy] = None,
         arguments: Optional[List[str]] = None,
     ) -> Application:
@@ -33,6 +34,7 @@ class AppService:
             prefix_id=prefix_id,
             exe_path=exe_path,
             runner_id=runner_id,
+            profile_id=profile_id,
             arguments=arguments or [],
             policy=policy or SecurityPolicy(),
         )

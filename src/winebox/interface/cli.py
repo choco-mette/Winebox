@@ -15,10 +15,13 @@ from winebox.application.execution_service import ExecutionService
 from winebox.application.import_service import ImportService
 from winebox.application.install_service import InstallService
 from winebox.application.prefix_service import PrefixService
+from winebox.application.profile_service import ProfileService
 from winebox.application.runner_service import RunnerService
 from winebox.common.doctor import SystemDoctor
 from winebox.common.exceptions import WineboxError
 from winebox.domain.models import HostMount, MountMode, SecurityPolicy
+from winebox.infrastructure.log_manager import LogManager
+from winebox.infrastructure.sqlite_repository import SqliteRepository
 
 app = typer.Typer(
     name="winebox",
@@ -31,12 +34,14 @@ app_app = typer.Typer(help="Manage and execute registered Windows applications."
 runner_app = typer.Typer(help="Manage system and custom Wine runners.")
 system_app = typer.Typer(help="Host system diagnostics and version info.")
 import_app = typer.Typer(help="Import portable applications and external prefixes.")
+profile_app = typer.Typer(help="Manage security profiles and permissions (ADR-020).")
 
 app.add_typer(prefix_app, name="prefix")
 app.add_typer(app_app, name="app")
 app.add_typer(runner_app, name="runner")
 app.add_typer(system_app, name="system")
 app.add_typer(import_app, name="import")
+app.add_typer(profile_app, name="profile")
 
 console = Console()
 
@@ -195,6 +200,30 @@ def prefix_remove(
         raise typer.Exit(code=1)
 
 
+@prefix_app.command("logs")
+def prefix_logs(
+    prefix_id: str = typer.Argument(..., help="Prefix ID to view logs for"),
+    lines: int = typer.Option(50, "--lines", "-n", help="Number of trailing log lines to display"),
+) -> None:
+    """View rotated execution logs for a Wine prefix (ADR-020)."""
+    repo = SqliteRepository()
+    log_mgr = LogManager(prefixes_dir=repo.prefixes_dir)
+    log_lines = log_mgr.read_logs(prefix_id=prefix_id, max_lines=lines)
+
+    if not log_lines:
+        console.print(f"[dim]No logs found for prefix '{prefix_id}'.[/dim]")
+        return
+
+    console.print(f"[bold cyan]Log output for prefix '{prefix_id}' (last {len(log_lines)} lines):[/bold cyan]\n")
+    for line in log_lines:
+        if "[STDERR]" in line or "[WARNING]" in line:
+            console.print(f"[yellow]{line}[/yellow]")
+        elif "Finished with Exit Code 0" in line or "[INFO]" in line:
+            console.print(f"[dim]{line}[/dim]")
+        else:
+            console.print(line)
+
+
 # ---------------- Application Commands ----------------
 @app_app.command("list")
 def app_list() -> None:
@@ -212,11 +241,26 @@ def app_list() -> None:
     table.add_column("ID", style="bold cyan")
     table.add_column("Name")
     table.add_column("Prefix", style="magenta")
+    table.add_column("Profile", style="blue")
     table.add_column("Executable Path")
+    table.add_column("Last Run", style="dim")
     table.add_column("Status", style="green")
 
     for a in apps:
-        table.add_row(a.id, a.name, a.prefix_id, a.exe_path, a.status.value)
+        last_run_str = "-"
+        if a.last_run_at:
+            code_color = "green" if a.last_exit_code == 0 else "red"
+            last_run_str = f"[{code_color}]Exit {a.last_exit_code}[/{code_color}] ({a.last_run_at.strftime('%m-%d %H:%M')})"
+
+        table.add_row(
+            a.id,
+            a.name,
+            a.prefix_id,
+            a.profile_id,
+            a.exe_path,
+            last_run_str,
+            a.status.value,
+        )
     console.print(table)
 
 
@@ -271,18 +315,17 @@ def app_register(
     name: str = typer.Option(..., "--name", "-n", help="Display name"),
     prefix_id: str = typer.Option(..., "--prefix", "-p", help="Target Prefix ID"),
     exe_path: str = typer.Option(..., "--exe", "-e", help="Relative path to .exe in prefix (e.g. drive_c/...)"),
-    network: bool = typer.Option(True, help="Enable or disable internet access"),
+    profile_id: str = typer.Option("permissive", "--profile", help="Security profile ID (ADR-020)"),
 ) -> None:
     """Register an existing executable inside a prefix as an application."""
     svc = AppService()
     try:
-        policy = SecurityPolicy(network=network)
         app_obj = svc.register_app(
             app_id=app_id,
             name=name,
             prefix_id=prefix_id,
             exe_path=exe_path,
-            policy=policy,
+            profile_id=profile_id,
         )
         console.print(f"[bold green]✓[/bold green] Application '{app_obj.name}' registered.")
     except WineboxError as e:
@@ -480,6 +523,126 @@ def install_wizard(
                     console.print("[dim]Skipping application registration.[/dim]")
     except WineboxError as e:
         console.print(f"[bold red]Installation Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+
+# ---------------- Security Profile Commands (ADR-020) ----------------
+@profile_app.command("list")
+def profile_list() -> None:
+    """List all available security profiles in SQLite database."""
+    svc = ProfileService()
+    profiles = svc.list_profiles()
+
+    table = Table(title="Security Profiles (SQLite)")
+    table.add_column("ID", style="bold cyan")
+    table.add_column("Display", justify="center")
+    table.add_column("Audio", justify="center")
+    table.add_column("Network", justify="center")
+    table.add_column("GPU", justify="center")
+    table.add_column("Type", justify="center")
+    table.add_column("Description")
+
+    for p in profiles:
+        disp = "[green]ON[/green]" if p.display else "[dim]OFF[/dim]"
+        aud = "[green]ON[/green]" if p.audio else "[dim]OFF[/dim]"
+        net = "[green]ON[/green]" if p.network else "[dim]OFF[/dim]"
+        gpu = "[green]ON[/green]" if p.gpu else "[dim]OFF[/dim]"
+        p_type = "[green]Built-in[/green]" if p.is_builtin else "[yellow]Custom[/yellow]"
+        table.add_row(p.id, disp, aud, net, gpu, p_type, p.description)
+
+    console.print(table)
+
+
+@profile_app.command("create")
+def profile_create(
+    profile_id: Optional[str] = typer.Option(None, "--id", "-i", help="Profile ID (prompted if omitted)"),
+) -> None:
+    """Interactive wizard to create a new custom security profile."""
+    console.print("\n[bold cyan]WineBox Security Profile Creator[/bold cyan]")
+
+    p_id = profile_id or typer.prompt("Profile ID (lowercase, e.g. gaming-strict)")
+    p_name = typer.prompt("Display Name", default=p_id.title())
+    p_desc = typer.prompt("Description", default="Custom user profile")
+
+    console.print("\n[bold]Configure Permissions:[/bold]")
+    allow_display = typer.confirm("Allow Display Server (X11/Wayland)?", default=True)
+    allow_audio = typer.confirm("Allow Audio (PulseAudio/PipeWire)?", default=True)
+    allow_net = typer.confirm("Allow Network / Internet access?", default=False)
+    allow_gpu = typer.confirm("Allow 3D GPU acceleration (/dev/dri)?", default=False)
+
+    svc = ProfileService()
+    try:
+        prof = svc.create_profile(
+            profile_id=p_id,
+            name=p_name,
+            display=allow_display,
+            audio=allow_audio,
+            network=allow_net,
+            gpu=allow_gpu,
+            description=p_desc,
+        )
+        console.print(f"\n[bold green]✓[/bold green] Security Profile '[bold cyan]{prof.id}[/bold cyan]' created successfully.")
+    except WineboxError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+
+@profile_app.command("edit")
+def profile_edit(
+    profile_id: str = typer.Argument(..., help="Profile ID to edit"),
+) -> None:
+    """Interactively edit permissions for an existing security profile."""
+    svc = ProfileService()
+    try:
+        prof = svc.get_profile(profile_id)
+    except WineboxError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+    console.print(f"\n[bold cyan]Editing Profile: {prof.name} ({prof.id})[/bold cyan]")
+    if prof.is_builtin:
+        console.print("[yellow]Note: Editing a built-in profile will customize its default permissions.[/yellow]")
+
+    new_name = typer.prompt("Display Name", default=prof.name)
+    new_desc = typer.prompt("Description", default=prof.description)
+    new_disp = typer.confirm("Allow Display Server?", default=prof.display)
+    new_aud = typer.confirm("Allow Audio?", default=prof.audio)
+    new_net = typer.confirm("Allow Network / Internet?", default=prof.network)
+    new_gpu = typer.confirm("Allow 3D GPU acceleration?", default=prof.gpu)
+
+    try:
+        svc.update_profile(
+            profile_id=profile_id,
+            name=new_name,
+            display=new_disp,
+            audio=new_aud,
+            network=new_net,
+            gpu=new_gpu,
+            description=new_desc,
+        )
+        console.print(f"[bold green]✓[/bold green] Security Profile '{profile_id}' updated.")
+    except WineboxError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+
+@profile_app.command("remove")
+def profile_remove(
+    profile_id: str = typer.Argument(..., help="Custom profile ID to delete"),
+    force: bool = typer.Option(False, "--force", "-f", help="Bypass confirmation prompt"),
+) -> None:
+    """Delete a custom security profile (fails if in use by active prefixes/apps)."""
+    if not force:
+        confirm = typer.confirm(f"Are you sure you want to delete profile '{profile_id}'?")
+        if not confirm:
+            raise typer.Abort()
+
+    svc = ProfileService()
+    try:
+        svc.delete_profile(profile_id)
+        console.print(f"[bold green]✓[/bold green] Security Profile '{profile_id}' deleted.")
+    except WineboxError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(code=1)
 
 

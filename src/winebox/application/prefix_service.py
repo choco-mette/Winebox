@@ -1,11 +1,11 @@
 """Prefix lifecycle application service."""
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 from winebox.common.exceptions import PrefixAuditError, WineboxError
 from winebox.domain.models import Prefix, PrefixOrigin, PrefixStatus, SecurityPolicy
 from winebox.infrastructure.bwrap_adapter import BwrapAdapter
-from winebox.infrastructure.config_repository import ConfigRepository
+from winebox.infrastructure.sqlite_repository import SqliteRepository
 from winebox.infrastructure.process_manager import prefix_lock
 from winebox.infrastructure.wine_adapter import WineAdapter
 from winebox.security.auditor import PrefixAuditor
@@ -17,10 +17,10 @@ class PrefixService:
 
     def __init__(
         self,
-        repo: Optional[ConfigRepository] = None,
+        repo: Optional[Any] = None,
         bwrap_adapter: Optional[BwrapAdapter] = None,
     ) -> None:
-        self.repo = repo or ConfigRepository()
+        self.repo = repo or SqliteRepository()
         self.bwrap_adapter = bwrap_adapter or BwrapAdapter()
 
     def create_prefix(
@@ -28,6 +28,7 @@ class PrefixService:
         prefix_id: str,
         name: Optional[str] = None,
         runner_id: str = "system-wine",
+        default_profile_id: str = "permissive",
         initialize_wineboot: bool = True,
         allow_network: bool = True,
     ) -> Prefix:
@@ -47,6 +48,7 @@ class PrefixService:
             id=prefix_id,
             name=name or prefix_id,
             runner_id=runner_id,
+            default_profile_id=default_profile_id,
             origin=PrefixOrigin.CREATED,
             status=PrefixStatus.READY,
         )

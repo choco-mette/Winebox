@@ -37,6 +37,28 @@ class HostMount:
 
 
 @dataclass
+class SecurityProfile:
+    id: str
+    name: str
+    is_builtin: bool = False
+    display: bool = True
+    audio: bool = True
+    network: bool = True
+    gpu: bool = True
+    description: str = ""
+
+    def to_policy(self, host_mounts: Optional[List[HostMount]] = None, env_vars: Optional[Dict[str, str]] = None) -> "SecurityPolicy":
+        return SecurityPolicy(
+            display=self.display,
+            audio=self.audio,
+            network=self.network,
+            gpu=self.gpu,
+            host_mounts=host_mounts or [],
+            env_vars=env_vars or {},
+        )
+
+
+@dataclass
 class SecurityPolicy:
     display: bool = True
     audio: bool = True
@@ -53,9 +75,12 @@ class Application:
     prefix_id: str
     exe_path: str  # Path relative to prefix drive_c or absolute within sandbox
     runner_id: str = "system-wine"
+    profile_id: str = "permissive"
     arguments: List[str] = field(default_factory=list)
     policy: SecurityPolicy = field(default_factory=SecurityPolicy)
     status: AppStatus = AppStatus.READY
+    last_run_at: Optional[datetime] = None
+    last_exit_code: Optional[int] = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -64,6 +89,7 @@ class Prefix:
     id: str
     name: str
     runner_id: str = "system-wine"
+    default_profile_id: str = "permissive"
     origin: PrefixOrigin = PrefixOrigin.CREATED
     status: PrefixStatus = PrefixStatus.READY
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -76,4 +102,3 @@ class Runner:
     wine_bin: Path
     wineserver_bin: Optional[Path] = None
     is_system: bool = True
-

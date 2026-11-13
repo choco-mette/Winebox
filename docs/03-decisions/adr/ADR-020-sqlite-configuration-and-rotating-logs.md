@@ -48,3 +48,4 @@ Seluruh keluaran teks proses Wine tidak disimpan di dalam database SQLite, melai
 ### Negatif / Mitigasi
 - File database SQLite tidak dapat diedit langsung menggunakan editor teks biasa seperti nano (dimitigasi dengan menyediakan perintah CLI interaktif `winebox profile edit` dan opsi ekspor/impor JSON/TOML).
 - Diperlukan layer repositori database (`SqliteRepository`) yang menggantikan `ConfigRepository` TOML.
+

@@ -1,11 +1,11 @@
 """Installation service for executing Windows installers in sandbox."""
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 from winebox.common.exceptions import WineboxError
 from winebox.domain.models import HostMount, MountMode, SecurityPolicy
 from winebox.infrastructure.bwrap_adapter import BwrapAdapter
-from winebox.infrastructure.config_repository import ConfigRepository
+from winebox.infrastructure.sqlite_repository import SqliteRepository
 from winebox.infrastructure.process_manager import prefix_lock
 from winebox.infrastructure.wine_adapter import WineAdapter
 from winebox.security.auditor import PrefixAuditor
@@ -17,10 +17,10 @@ class InstallService:
 
     def __init__(
         self,
-        repo: Optional[ConfigRepository] = None,
+        repo: Optional[Any] = None,
         bwrap_adapter: Optional[BwrapAdapter] = None,
     ) -> None:
-        self.repo = repo or ConfigRepository()
+        self.repo = repo or SqliteRepository()
         self.bwrap_adapter = bwrap_adapter or BwrapAdapter()
 
     def scan_for_executables(self, prefix_inner: Path) -> List[str]:

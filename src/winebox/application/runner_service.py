@@ -1,16 +1,16 @@
 """Wine runner application service."""
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 from winebox.domain.models import Runner
-from winebox.infrastructure.config_repository import ConfigRepository
+from winebox.infrastructure.sqlite_repository import SqliteRepository
 
 
 class RunnerService:
     """Manages system and custom Wine runners."""
 
-    def __init__(self, repo: Optional[ConfigRepository] = None) -> None:
-        self.repo = repo or ConfigRepository()
+    def __init__(self, repo: Optional[Any] = None) -> None:
+        self.repo = repo or SqliteRepository()
 
     def list_runners(self) -> List[Runner]:
         return self.repo.list_runners()

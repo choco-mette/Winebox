@@ -2,11 +2,12 @@
 
 import subprocess
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 from winebox.common.exceptions import ResourceNotFoundError
 from winebox.domain.models import Application
 from winebox.infrastructure.bwrap_adapter import BwrapAdapter
-from winebox.infrastructure.config_repository import ConfigRepository
+from winebox.infrastructure.log_manager import LogManager
+from winebox.infrastructure.sqlite_repository import SqliteRepository
 from winebox.infrastructure.process_manager import prefix_lock
 from winebox.infrastructure.wine_adapter import WineAdapter
 from winebox.security.auditor import PrefixAuditor
@@ -15,17 +16,18 @@ from winebox.security.validator import PolicyValidator
 
 
 class ExecutionService:
-    """Orchestrates security validation and sandboxed process execution."""
+    """Orchestrates security validation, log rotation, and sandboxed process execution."""
 
     def __init__(
         self,
-        repo: Optional[ConfigRepository] = None,
+        repo: Optional[Any] = None,
         bwrap_adapter: Optional[BwrapAdapter] = None,
         validator: Optional[PolicyValidator] = None,
     ) -> None:
-        self.repo = repo or ConfigRepository()
+        self.repo = repo or SqliteRepository()
         self.bwrap_adapter = bwrap_adapter or BwrapAdapter()
         self.validator = validator or PolicyValidator()
+        self.log_manager = LogManager(prefixes_dir=self.repo.prefixes_dir)
 
     def run_app(
         self,
@@ -33,7 +35,7 @@ class ExecutionService:
         extra_args: Optional[List[str]] = None,
         inherit_stdio: bool = True,
     ) -> subprocess.CompletedProcess:
-        """Executes an application inside Bubblewrap sandbox with prefix locking."""
+        """Executes an application inside Bubblewrap sandbox with prefix locking and log rotation."""
         app = self.repo.load_app(app_id)
         prefix = self.repo.load_prefix(app.prefix_id)
         runner = self.repo.load_runner(app.runner_id)
@@ -68,9 +70,26 @@ class ExecutionService:
                 runner=runner,
             )
 
-            return self.bwrap_adapter.execute_in_sandbox(
+            res = self.bwrap_adapter.execute_in_sandbox(
                 bwrap_args=bwrap_args,
                 command_inside=cmd_inside,
                 inherit_stdio=inherit_stdio,
             )
+
+            # Update telemetry in database
+            if hasattr(self.repo, "update_app_last_run"):
+                self.repo.update_app_last_run(app_id=app.id, exit_code=res.returncode)
+
+            # Log execution details to rotating log file
+            stdout_str = res.stdout if hasattr(res, "stdout") and res.stdout else ""
+            stderr_str = res.stderr if hasattr(res, "stderr") and res.stderr else ""
+            self.log_manager.log_execution(
+                prefix_id=prefix.id,
+                app_id=app.id,
+                stdout=stdout_str,
+                stderr=stderr_str,
+                exit_code=res.returncode,
+            )
+
+            return res
 
