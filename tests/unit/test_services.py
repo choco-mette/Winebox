@@ -7,14 +7,14 @@ from winebox.application.execution_service import ExecutionService
 from winebox.application.import_service import ImportService
 from winebox.application.prefix_service import PrefixService
 from winebox.domain.models import Application, Prefix, SecurityPolicy
-from winebox.infrastructure.config_repository import ConfigRepository
+from winebox.infrastructure.sqlite_repository import SqliteRepository
 
 
 class TestServices(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         base = Path(self.temp_dir.name)
-        self.repo = ConfigRepository(data_root=base / "data", config_root=base / "config")
+        self.repo = SqliteRepository(data_root=base / "data", config_root=base / "config")
         self.mock_bwrap = MagicMock()
         self.mock_bwrap.execute_in_sandbox.return_value.returncode = 0
 
@@ -33,6 +33,9 @@ class TestServices(unittest.TestCase):
         self.assertTrue((p_dir / "home").exists())
 
     def test_app_service_crud(self):
+        prefix_svc = PrefixService(repo=self.repo, bwrap_adapter=self.mock_bwrap)
+        prefix_svc.create_prefix("p1", initialize_wineboot=False)
+
         svc = AppService(repo=self.repo)
         app = svc.register_app(
             app_id="app1",

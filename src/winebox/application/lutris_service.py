@@ -26,3 +26,4 @@ class LutrisService:
         if launch_lutris:
             self.adapter.launch_installer(yaml_path)
         return yaml_path
+

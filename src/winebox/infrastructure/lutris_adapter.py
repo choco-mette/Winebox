@@ -82,3 +82,4 @@ class LutrisAdapter:
             stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
+
