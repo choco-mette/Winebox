@@ -104,11 +104,13 @@ def add_wizard(
     try:
         if mode == "portable":
             import_svc = ImportService()
-            candidates = import_svc.scan_portable_executables(resolved_source)
-            exe_options = [(exe, f"🚀 {exe}") for exe in candidates] + [("__manual__", "⌨ [Enter .exe path manually]")]
-            chosen_exe = tui_select("Select Main Executable File (.exe)", exe_options, default_index=0)
-            if chosen_exe == "__manual__":
-                chosen_exe = typer.prompt("Enter relative .exe path inside folder")
+            chosen_exe = tui_browse_file(
+                title="Select Main Executable File (.exe)",
+                start_dir=resolved_source,
+                root_boundary=resolved_source,
+                relative_to=resolved_source,
+                extensions=(".exe",),
+            )
 
             with console.status(f"[bold green]Importing and auditing '{app_name}' into prefix '{target_prefix}'..."):
                 import_svc.import_portable_app(
@@ -131,7 +133,7 @@ def add_wizard(
             )
             console.print("\n[bold green]✓ Installer execution finished.[/bold green]")
 
-            exe_options = [(exe, f"🚀 {exe}") for exe in candidates] + [
+            exe_options = [(exe, f"⚙ {exe}") for exe in candidates] + [
                 ("__manual__", "⌨ [Enter .exe path manually]"),
                 ("__skip__", "⏭ [Skip application registration]"),
             ]
