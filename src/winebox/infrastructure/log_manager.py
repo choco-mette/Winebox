@@ -65,3 +65,4 @@ class LogManager:
                 return [line.rstrip() for line in lines[-max_lines:]]
         except Exception:
             return []
+

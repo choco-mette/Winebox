@@ -55,6 +55,7 @@ def show_help(
     root_ctx = ctx.find_root()
     root_cmd = root_ctx.command
 
+
     if not command_name:
         console.print(root_cmd.get_help(root_ctx))
         return
@@ -529,11 +530,11 @@ def install_wizard(
 # ---------------- Security Profile Commands (ADR-020) ----------------
 @profile_app.command("list")
 def profile_list() -> None:
-    """List all available security profiles in SQLite database."""
+    """List all available security profiles."""
     svc = ProfileService()
     profiles = svc.list_profiles()
 
-    table = Table(title="Security Profiles (SQLite)")
+    table = Table(title="Security Profiles")
     table.add_column("ID", style="bold cyan")
     table.add_column("Display", justify="center")
     table.add_column("Audio", justify="center")

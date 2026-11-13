@@ -79,3 +79,4 @@ class ProfileService:
 
     def delete_profile(self, profile_id: str) -> None:
         self.repo.delete_profile(profile_id)
+
