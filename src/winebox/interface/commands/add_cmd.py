@@ -184,3 +184,4 @@ def _print_summary_panel(name: str, app_id: str, prefix: str, profile: str, exe:
             border_style="green",
         )
     )
+

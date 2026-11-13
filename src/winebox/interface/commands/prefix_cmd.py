@@ -133,3 +133,4 @@ def prefix_logs(
             console.print(f"[dim]{line}[/dim]")
         else:
             console.print(line)
+

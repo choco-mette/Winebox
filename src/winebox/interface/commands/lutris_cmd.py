@@ -45,3 +45,4 @@ def lutris_add(
     except WineboxError as e:
         console.print(f"[bold red]Lutris Error:[/bold red] {e}")
         raise typer.Exit(code=1)
+

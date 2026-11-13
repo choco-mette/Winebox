@@ -44,3 +44,4 @@ def system_doctor() -> None:
 def system_version() -> None:
     """Show WineBox version."""
     rprint(f"[bold cyan]WineBox[/bold cyan] version [bold green]{__version__}[/bold green]")
+

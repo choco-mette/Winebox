@@ -130,3 +130,4 @@ def profile_remove(
     except WineboxError as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(code=1)
+

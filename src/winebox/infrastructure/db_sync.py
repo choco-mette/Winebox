@@ -103,3 +103,4 @@ def import_legacy_toml_if_needed(repo: "SqliteRepository") -> None:
                 repo.save_app(app)
             except Exception:
                 pass
+

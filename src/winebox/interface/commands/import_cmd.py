@@ -57,3 +57,4 @@ def import_prefix(
         except WineboxError as e:
             console.print(f"[bold red]Import Error:[/bold red] {e}")
             raise typer.Exit(code=1)
+

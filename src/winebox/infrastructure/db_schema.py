@@ -133,3 +133,4 @@ def init_database_schema(conn: sqlite3.Connection) -> None:
                 """,
                 (p.id, p.name, int(p.is_builtin), int(p.display), int(p.audio), int(p.network), int(p.gpu), p.description),
             )
+
