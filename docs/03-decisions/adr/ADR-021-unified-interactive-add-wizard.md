@@ -13,12 +13,19 @@ Sebelumnya, penambahan aplikasi Windows ke dalam WineBox terbagi ke dalam alur y
 ## Keputusan
 
 ### 1. Perintah Terpadu Satu Pintu: `winebox add`
-Menyediakan perintah wizard terpadu `winebox add` di antarmuka baris perintah (CLI) yang memandu pengguna langkah demi langkah. Perintah `winebox install` tetap dipertahankan dan didelegasikan ke wizard ini.
+Menyediakan perintah wizard tunggal `winebox add` di antarmuka baris perintah (CLI) dan menghapus perintah lama `winebox install` agar tidak terjadi duplikasi perintah.
 
-### 2. Deteksi dan Pemilihan Jenis Sumber Interaktif
-Wizard menanyakan jenis sumber instalasi:
-- `[1] Folder Game / Aplikasi Pre-installed (Portable)`: Menjalankan staging direktori, audit symlink, dan pemindahan ke `drive_c/Program Files/<app_id>`.
-- `[2] Berkas Installer Windows (.exe / .msi)`: Menjalankan eksekusi installer di dalam sandbox Bubblewrap terisolasi dengan akses read-only ke installer di host.
+### 2. Antarmuka TUI Interaktif Bergaya Modern (`↑/↓`, `Space`, `Enter`)
+Seluruh pemilihan opsi di dalam wizard menggunakan komponen TUI interaktif berbasis terminal (`termios`/`tty` + `Rich Live`) menyerupai `npx skills`:
+- Navigasi atas/bawah menggunakan tombol panah (`↑` / `↓`).
+- Menandai pilihan aktif menggunakan `Space` (`●` / `○`).
+- Konfirmasi untuk melanjutkan ke langkah berikutnya menggunakan `Enter`.
+
+### 3. Penjelajah Direktori Interaktif (Interactive CLI File/Folder Browser)
+Untuk memilih direktori game pre-installed maupun berkas installer tanpa mengetik path manual:
+- Dimulai dari direktori kerja saat ini (`cwd`).
+- Pengguna dapat memilih `.. (Kembali ke direktori sebelumnya)` untuk naik ke folder induk, masuk ke subdirektori (`📁 nama_folder/`), dan menekan `Space`/`Enter` untuk mengunci direktori tujuan (`[✓ Pilih Direktori Ini]`) atau berkas installer.
+- Tetap menyediakan opsi fallback input path teks jika pengguna ingin menempelkan path secara langsung.
 
 ### 3. Otomatisasi Normalisasi Nama dan ID Aplikasi
 Mengurangi redundansi input dengan meminta satu kali `Nama Aplikasi` (display name). Sistem secara otomatis menghasilkan `id` aplikasi yang valid melalui proses slugifikasi (*kebab-case*, huruf kecil, mengganti spasi dan karakter khusus dengan tanda minus `-`).
@@ -49,3 +56,4 @@ Wizard menampilkan daftar Wine Prefix yang ada saat ini, serta opsi `[Create New
 ### Negatif / Mitigasi
 - Wizard interaktif bergantung pada TTY terminal (mitigasi: perintah `winebox import app` dan flag opsional pada `winebox add` tetap mendukung mode non-interaktif untuk kebutuhan skrip otomatisasi).
 - Folder dengan puluhan ribu subdirektori dapat memperlambat proses pemindaian `.exe` (mitigasi: batas kedalaman pencarian atau pemindaian rekursif terarah).
+

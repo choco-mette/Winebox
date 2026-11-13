@@ -22,6 +22,7 @@ from winebox.common.exceptions import WineboxError
 from winebox.domain.models import HostMount, MountMode, SecurityPolicy
 from winebox.infrastructure.log_manager import LogManager
 from winebox.infrastructure.sqlite_repository import SqliteRepository
+from winebox.interface.tui import slugify, tui_browse_directory, tui_browse_file, tui_select
 
 app = typer.Typer(
     name="winebox",
@@ -440,94 +441,190 @@ def import_prefix(
             raise typer.Exit(code=1)
 
 
-# ---------------- Top-level Install Wizard ----------------
-@app.command("install")
-def install_wizard(
-    installer_path: Path = typer.Argument(..., help="Path to Windows installer (.exe or .msi)"),
-    prefix_id: Optional[str] = typer.Option(None, "--prefix", "-p", help="Target prefix ID (prompts if omitted)"),
+# ---------------- Unified Interactive Add Wizard (ADR-021) ----------------
+@app.command("add")
+def add_wizard(
+    source_path: Optional[Path] = typer.Argument(
+        None,
+        help="Optional path to pre-installed game/app folder or Windows installer (.exe/.msi)",
+    ),
+    prefix_id: Optional[str] = typer.Option(None, "--prefix", "-p", help="Target prefix ID"),
+    profile_id: Optional[str] = typer.Option(None, "--profile", help="Security profile ID (default: permissive)"),
 ) -> None:
-    """Interactive Installation Wizard for Windows EXE / MSI installers."""
-    prefix_svc = PrefixService()
-    prefixes = prefix_svc.list_prefixes()
+    """Interactive TUI Wizard to add a pre-installed game/app or run a Windows installer."""
+    console.print("\n[bold cyan]✨ WineBox Interactive Setup Wizard[/bold cyan]\n")
 
-    # Step 1: Prefix Selection / Creation
-    target_prefix = prefix_id
-    if not target_prefix:
-        console.print("\n[bold cyan]WineBox Installation Wizard[/bold cyan]")
-        console.print("Installer:", str(installer_path.resolve()))
+    # Step 1: Determine Mode & Source Path
+    if source_path is not None:
+        resolved_source = source_path.expanduser().resolve()
+        if not resolved_source.exists():
+            console.print(f"[bold red]Error:[/bold red] Path tidak ditemukan: {resolved_source}")
+            raise typer.Exit(code=1)
+        mode = "portable" if resolved_source.is_dir() else "installer"
+        console.print(f"[bold green]✔[/bold green] [bold]Sumber:[/bold] [cyan]{resolved_source}[/cyan] ({mode})")
+    else:
+        mode = tui_select(
+            "Pilih Jenis Aplikasi / Game",
+            [
+                ("portable", "Folder Game / Aplikasi Pre-installed (Portable)"),
+                ("installer", "File Installer Windows (.exe / .msi)"),
+            ],
+            default_index=0,
+        )
+        if mode == "portable":
+            resolved_source = tui_browse_directory("Pilih Direktori Game / Aplikasi")
+        else:
+            resolved_source = tui_browse_file("Pilih File Installer (.exe / .msi)")
 
-        if prefixes:
-            console.print("\nExisting prefixes:")
-            for idx, p in enumerate(prefixes, 1):
-                console.print(f"  {idx}. [bold cyan]{p.id}[/bold cyan] ({p.name})")
-            console.print(f"  {len(prefixes) + 1}. [bold yellow][Create New Prefix][/bold yellow]")
+        if not resolved_source.exists():
+            console.print(f"[bold red]Error:[/bold red] Path tidak ditemukan: {resolved_source}")
+            raise typer.Exit(code=1)
 
-            choice = typer.prompt(
-                f"Select prefix (1-{len(prefixes) + 1})",
-                default="1",
-            )
-            try:
-                choice_int = int(choice)
-                if 1 <= choice_int <= len(prefixes):
-                    target_prefix = prefixes[choice_int - 1].id
-            except ValueError:
-                pass
+    # Step 2: Application Name & Auto-Slug ID
+    default_name = resolved_source.name if resolved_source.is_dir() else resolved_source.stem
+    app_name = typer.prompt("\n◆ Nama Game / Aplikasi", default=default_name)
+    app_id = slugify(app_name)
+    console.print(f"  [dim]ID otomatis:[/dim] [bold cyan]{app_id}[/bold cyan]\n")
 
-        if not target_prefix:
-            # Create new prefix
-            new_id = typer.prompt("Enter new prefix ID", default="default")
-            new_name = typer.prompt("Enter new prefix display name", default=new_id)
-            with console.status(f"[bold green]Creating prefix '{new_id}'..."):
-                prefix_svc.create_prefix(prefix_id=new_id, name=new_name)
-            target_prefix = new_id
+    # Step 3: Security Profile Selection (Default: permissive)
+    profile_svc = ProfileService()
+    profiles = profile_svc.list_profiles()
+    chosen_profile = profile_id
+    if not chosen_profile:
+        prof_options = []
+        default_prof_idx = 0
+        # Sort so permissive appears first
+        sorted_profiles = sorted(profiles, key=lambda p: (0 if p.id == "permissive" else 1, p.id))
+        for idx, p in enumerate(sorted_profiles):
+            tag = " [Default - Cocok Game]" if p.id == "permissive" else ""
+            prof_options.append((p.id, f"{p.id}{tag} — {p.description}"))
+            if p.id == "permissive":
+                default_prof_idx = idx
 
-    # Step 2: Policy Configuration
-    allow_net = typer.confirm("Allow internet access for installer?", default=True)
-
-    # Step 3: Run installer in sandbox
-    install_svc = InstallService()
-    console.print(f"\n[bold green]Launching installer inside sandbox...[/bold green]")
-    try:
-        candidates = install_svc.run_installer(
-            installer_path=installer_path,
-            prefix_id=target_prefix,
-            policy=SecurityPolicy(network=allow_net),
+        chosen_profile = tui_select(
+            "Pilih Security Profile",
+            prof_options,
+            default_index=default_prof_idx,
         )
 
-        console.print("\n[bold green]✓ Installer execution finished.[/bold green]")
-        if candidates:
-            console.print("\n[bold cyan]Discovered new executables:[/bold cyan]")
-            for idx, c in enumerate(candidates, 1):
-                console.print(f"  {idx}. {c}")
-
-            reg_choice = typer.prompt(
-                f"Select executable to register as application (1-{len(candidates)}, or 'skip')",
-                default="1",
-            )
-            if reg_choice.lower() != "skip":
+    # Step 4: Prefix Selection or Creation
+    prefix_svc = PrefixService()
+    prefixes = prefix_svc.list_prefixes()
+    target_prefix = prefix_id
+    if not target_prefix:
+        prefix_options = [
+            (p.id, f"{p.id} ({p.name}) [Profile: {p.default_profile_id}]") for p in prefixes
+        ]
+        prefix_options.append(("__new__", "+ [Buat Prefix Baru]"))
+        chosen_prefix = tui_select(
+            "Pilih Wine Prefix",
+            prefix_options,
+            default_index=0,
+        )
+        if chosen_prefix == "__new__":
+            new_prefix_name = typer.prompt("\n◆ Nama Prefix Baru", default=app_name)
+            new_prefix_id = slugify(new_prefix_name)
+            console.print(f"  [dim]Prefix ID otomatis:[/dim] [bold cyan]{new_prefix_id}[/bold cyan]\n")
+            with console.status(f"[bold green]Membuat prefix '{new_prefix_id}' (profile: {chosen_profile})..."):
                 try:
-                    c_idx = int(reg_choice) - 1
-                    chosen_exe = candidates[c_idx]
-                    app_id = typer.prompt(
-                        "Application ID",
-                        default=Path(chosen_exe).stem.lower().replace(" ", "-"),
+                    prefix_svc.create_prefix(
+                        prefix_id=new_prefix_id,
+                        name=new_prefix_name,
+                        default_profile_id=chosen_profile,
                     )
-                    app_name = typer.prompt("Application Display Name", default=Path(chosen_exe).stem)
+                except WineboxError as e:
+                    console.print(f"[bold red]Error membuat prefix:[/bold red] {e}")
+                    raise typer.Exit(code=1)
+            target_prefix = new_prefix_id
+        else:
+            target_prefix = chosen_prefix
 
-                    app_svc = AppService()
-                    app_svc.register_app(
-                        app_id=app_id,
-                        name=app_name,
-                        prefix_id=target_prefix,
-                        exe_path=chosen_exe,
+    # Step 5: Executable Selection & Execution
+    try:
+        if mode == "portable":
+            import_svc = ImportService()
+            candidates = import_svc.scan_portable_executables(resolved_source)
+            exe_options = [(exe, f"🚀 {exe}") for exe in candidates]
+            exe_options.append(("__manual__", "⌨ [Ketik path .exe manual]"))
+
+            chosen_exe = tui_select(
+                "Pilih File Executable Utama (.exe)",
+                exe_options,
+                default_index=0,
+            )
+            if chosen_exe == "__manual__":
+                chosen_exe = typer.prompt("Masukkan path relatif file .exe di dalam folder")
+
+            with console.status(f"[bold green]Mengimpor dan mengaudit '{app_name}' ke prefix '{target_prefix}'..."):
+                import_svc.import_portable_app(
+                    source_dir=resolved_source,
+                    prefix_id=target_prefix,
+                    app_id=app_id,
+                    name=app_name,
+                    exe_rel_path=chosen_exe,
+                    profile_id=chosen_profile,
+                )
+
+            console.print(
+                Panel(
+                    f"[bold green]✓ Game / Aplikasi berhasil ditambahkan![/bold green]\n\n"
+                    f"• [bold]Nama:[/bold] {app_name} ([cyan]{app_id}[/cyan])\n"
+                    f"• [bold]Prefix:[/bold] {target_prefix}\n"
+                    f"• [bold]Profile:[/bold] {chosen_profile}\n"
+                    f"• [bold]Executable:[/bold] {chosen_exe}\n\n"
+                    f"Jalankan dengan perintah:\n"
+                    f"  [bold yellow]winebox app run {app_id}[/bold yellow]",
+                    title="[bold green]Setup Selesai[/bold green]",
+                    border_style="green",
+                )
+            )
+        else:
+            prof_obj = profile_svc.get_profile(chosen_profile)
+            install_svc = InstallService()
+            console.print("\n[bold green]Menjalankan installer di dalam sandbox Bubblewrap...[/bold green]")
+            candidates = install_svc.run_installer(
+                installer_path=resolved_source,
+                prefix_id=target_prefix,
+                policy=prof_obj.to_policy(),
+            )
+            console.print("\n[bold green]✓ Eksekusi installer selesai.[/bold green]")
+
+            exe_options = [(exe, f"🚀 {exe}") for exe in candidates]
+            exe_options.append(("__manual__", "⌨ [Ketik path .exe manual]"))
+            exe_options.append(("__skip__", "⏭ [Lewati registrasi aplikasi]"))
+
+            chosen_exe = tui_select(
+                "Pilih File Executable Hasil Install (.exe)",
+                exe_options,
+                default_index=0,
+            )
+            if chosen_exe == "__manual__":
+                chosen_exe = typer.prompt("Masukkan path relatif .exe di dalam prefix (misal: drive_c/Program Files/...)")
+
+            if chosen_exe != "__skip__":
+                app_svc = AppService()
+                app_svc.register_app(
+                    app_id=app_id,
+                    name=app_name,
+                    prefix_id=target_prefix,
+                    exe_path=chosen_exe,
+                    profile_id=chosen_profile,
+                )
+                console.print(
+                    Panel(
+                        f"[bold green]✓ Aplikasi berhasil terinstal dan terdaftar![/bold green]\n\n"
+                        f"• [bold]Nama:[/bold] {app_name} ([cyan]{app_id}[/cyan])\n"
+                        f"• [bold]Prefix:[/bold] {target_prefix}\n"
+                        f"• [bold]Profile:[/bold] {chosen_profile}\n"
+                        f"• [bold]Executable:[/bold] {chosen_exe}\n\n"
+                        f"Jalankan dengan perintah:\n"
+                        f"  [bold yellow]winebox app run {app_id}[/bold yellow]",
+                        title="[bold green]Instalasi Selesai[/bold green]",
+                        border_style="green",
                     )
-                    console.print(
-                        f"[bold green]✓[/bold green] Application '{app_name}' registered! Run it with: 'winebox app run {app_id}'"
-                    )
-                except (ValueError, IndexError):
-                    console.print("[dim]Skipping application registration.[/dim]")
+                )
     except WineboxError as e:
-        console.print(f"[bold red]Installation Error:[/bold red] {e}")
+        console.print(f"[bold red]Setup Error:[/bold red] {e}")
         raise typer.Exit(code=1)
 
 

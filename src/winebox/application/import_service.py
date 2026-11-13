@@ -2,7 +2,7 @@
 
 import uuid
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, List, Optional, Tuple
 from winebox.common.exceptions import PrefixAuditError, WineboxError
 from winebox.domain.models import Application, Prefix, PrefixOrigin, PrefixStatus, SecurityPolicy
 from winebox.infrastructure.sqlite_repository import SqliteRepository
@@ -15,6 +15,29 @@ class ImportService:
 
     def __init__(self, repo: Optional[Any] = None) -> None:
         self.repo = repo or SqliteRepository()
+
+    def scan_portable_executables(self, source_dir: Path) -> List[str]:
+        """Scans portable directory for .exe files, sorted with root and main exes first."""
+        resolved = source_dir.resolve()
+        if not resolved.exists() or not resolved.is_dir():
+            return []
+
+        candidates: List[str] = []
+        for p in resolved.rglob("*"):
+            if p.is_file() and p.suffix.lower() == ".exe":
+                try:
+                    rel = p.relative_to(resolved)
+                    candidates.append(str(rel))
+                except ValueError:
+                    pass
+
+        def sort_key(item: str) -> Tuple[int, int, str]:
+            lower = item.lower()
+            is_helper = 1 if any(k in lower for k in ("unins", "uninstall", "dxsetup", "vcredist", "crash")) else 0
+            depth = len(Path(item).parts)
+            return (is_helper, depth, lower)
+
+        return sorted(candidates, key=sort_key)
 
     def import_portable_app(
         self,
