@@ -23,4 +23,5 @@ Index keputusan arsitektural proyek WineBox.
 | [ADR-017](ADR-017-permissive-hardware-default-policy.md) | Kebijakan Default: Hardware Allowed, Host Filesystem Denied | Accepted | 2026-11-08 |
 | [ADR-018](ADR-018-cli-framework-typer-rich.md) | Framework CLI Menggunakan Typer dan Rich dengan System Doctor | Accepted | 2026-11-08 |
 | [ADR-019](ADR-019-build-tooling-hatchling.md) | Tooling Build dan Packaging PEP 621 Menggunakan Hatchling | Accepted | 2026-11-08 |
+| [ADR-020](ADR-020-sqlite-configuration-and-rotating-logs.md) | Manajemen Konfigurasi SQLite Terpusat dan Log File Terotasi | Accepted | 2026-11-13 |
 

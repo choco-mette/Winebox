@@ -1564,6 +1564,7 @@ Keputusan berikut telah disepakati dalam diskusi desain WineBox.
 | ADR-017 | Permissive hardware default policy (Hardware Allowed, Host Filesystem Denied) | Accepted |
 | ADR-018 | CLI stack using Typer and Rich with system doctor diagnosis | Accepted |
 | ADR-019 | Build and packaging tooling using PEP 621 with Hatchling | Accepted |
+| ADR-020 | Centralized SQLite configuration management and rotating file logs | Accepted |
 
 Catatan: Dokumen ADR individual lengkap terdokumentasi di direktori `docs/03-decisions/adr/`.
 

@@ -33,3 +33,4 @@ htmlcov/
 local_test_data/
 *.lock
 
+docs/private
