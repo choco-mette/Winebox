@@ -25,3 +25,4 @@ def read_key() -> str:
         return {"k": "UP", "K": "UP", "j": "DOWN", "J": "DOWN"}.get(ch, ch)
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+

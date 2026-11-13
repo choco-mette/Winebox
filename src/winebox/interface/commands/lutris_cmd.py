@@ -22,27 +22,26 @@ def lutris_add(
     apps = app_svc.list_apps()
     if not apps:
         console.print(
-            "[yellow]Belum ada aplikasi yang terdaftar di WineBox. Jalankan 'winebox add' terlebih dahulu.[/yellow]"
+            "[yellow]No applications registered in WineBox yet. Run 'winebox add' first.[/yellow]"
         )
         raise typer.Exit(code=1)
 
     target_app_id = app_id
     if not target_app_id:
         options = [(a.id, f"{a.name} ({a.id}) [Prefix: {a.prefix_id}, Profile: {a.profile_id}]") for a in apps]
-        target_app_id = tui_select("Pilih Game / Aplikasi untuk Ditambahkan ke Lutris", options, default_index=0)
+        target_app_id = tui_select("Select Game / Application to Export to Lutris", options, default_index=0)
 
     lutris_svc = LutrisService()
     try:
         yaml_path = lutris_svc.export_app_to_lutris(target_app_id, launch_lutris=launch)
-        console.print(f"[bold green]✓[/bold green] File installer Lutris dibuat: [cyan]{yaml_path}[/cyan]")
+        console.print(f"[bold green]✓[/bold green] Lutris installer file created: [cyan]{yaml_path}[/cyan]")
         if launch:
             console.print(
-                "[bold green]✓[/bold green] Jendela instalasi Lutris telah dipanggil! "
-                "Klik [bold cyan]Install[/bold cyan] di Lutris untuk menyimpan ke Library."
+                "[bold green]✓[/bold green] Lutris installer window launched! "
+                "Click [bold cyan]Install[/bold cyan] in Lutris to save it to your Library."
             )
         else:
-            console.print(f'Jalankan manual dengan: [bold yellow]lutris --install "{yaml_path}"[/bold yellow]')
+            console.print(f'Run manually with: [bold yellow]lutris --install "{yaml_path}"[/bold yellow]')
     except WineboxError as e:
         console.print(f"[bold red]Lutris Error:[/bold red] {e}")
         raise typer.Exit(code=1)
-

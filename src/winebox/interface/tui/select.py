@@ -14,7 +14,7 @@ def tui_select(
     title: str,
     options: Sequence[Tuple[str, str]],
     default_index: int = 0,
-    subtitle: str = "↑/↓: Navigasi  •  Space: Pilih (●)  •  Enter: Lanjut",
+    subtitle: str = "↑/↓: Navigate  •  Space: Select (●)  •  Enter: Continue",
 ) -> str:
     """Interactive selector with Up/Down navigation, Space to mark, and Enter to confirm."""
     if not options:
@@ -25,7 +25,7 @@ def tui_select(
         console.print(f"\n[bold cyan]◆ {title}[/bold cyan]")
         for idx, (_, label) in enumerate(options, 1):
             console.print(f"  {idx}. {label}")
-        choice = typer.prompt("Pilih nomor", default=str(default_index + 1))
+        choice = typer.prompt("Select number", default=str(default_index + 1))
         try:
             c_idx = int(choice) - 1
             if 0 <= c_idx < len(options):
@@ -44,7 +44,7 @@ def tui_select(
         start = max(0, min(cursor - max_visible // 2, max(0, total - max_visible)))
         end = min(total, start + max_visible)
         if start > 0:
-            text.append("  ↑ ... opsi di atas ...\n", style="dim")
+            text.append("  ↑ ... more options above ...\n", style="dim")
         for idx in range(start, end):
             _, label = options[idx]
             is_cur = idx == cursor
@@ -53,7 +53,7 @@ def tui_select(
             text.append("● " if is_sel else "○ ", style="bold green" if is_sel else "dim")
             text.append(f"{label}\n", style="bold white" if is_cur else ("green" if is_sel else "white"))
         if end < total:
-            text.append("  ↓ ... opsi di bawah ...\n", style="dim")
+            text.append("  ↓ ... more options below ...\n", style="dim")
         text.append(f"\n{subtitle}", style="dim")
         return Panel(text, title=f"[bold cyan]◆ {title}[/bold cyan]", title_align="left", border_style="cyan", padding=(0, 1))
 
@@ -75,7 +75,7 @@ def tui_select(
                     chosen_val, chosen_label = options[final_idx]
                     break
     except KeyboardInterrupt:
-        console.print("\n[yellow]Dibatalkan oleh pengguna.[/yellow]")
+        console.print("\n[yellow]Cancelled by user.[/yellow]")
         raise typer.Exit(code=1)
 
     console.print(f"[bold green]✔[/bold green] [bold]{title}:[/bold] [cyan]{chosen_label}[/cyan]")

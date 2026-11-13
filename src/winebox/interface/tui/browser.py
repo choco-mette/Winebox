@@ -31,9 +31,9 @@ def _tui_browse_fs(
     def build_entries(directory: Path) -> List[Tuple[str, str, Optional[Path]]]:
         entries: List[Tuple[str, str, Optional[Path]]] = []
         if mode == "dir":
-            entries.append(("SELECT_CURRENT", f"✓ [Pilih Direktori Ini: {directory.name or '/'}]", directory))
+            entries.append(("SELECT_CURRENT", f"✓ [Select this directory: {directory.name or '/'}]", directory))
         if directory.parent != directory:
-            entries.append(("NAV_UP", f"↩ .. (Kembali ke {directory.parent.name or '/'})", directory.parent))
+            entries.append(("NAV_UP", f"↩ .. (Back to {directory.parent.name or '/'})", directory.parent))
         try:
             items = list(directory.iterdir())
         except PermissionError:
@@ -48,20 +48,20 @@ def _tui_browse_fs(
         for d in subdirs:
             entries.append(("DIR", f"📁 {d.name}/", d))
 
-        entries.append(("MANUAL", "⌨ [Ketik path manual]", None))
+        entries.append(("MANUAL", "⌨ [Enter path manually]", None))
         return entries
 
     entries = build_entries(current_dir)
 
     def render() -> Panel:
         text = Text()
-        text.append("📂 Lokasi saat ini: ", style="bold yellow")
+        text.append("📂 Current directory: ", style="bold yellow")
         text.append(f"{current_dir}\n\n", style="bold white")
         total = len(entries)
         start = max(0, min(cursor - max_visible // 2, max(0, total - max_visible)))
         end = min(total, start + max_visible)
         if start > 0:
-            text.append("  ↑ ... item di atas ...\n", style="dim")
+            text.append("  ↑ ... more items above ...\n", style="dim")
 
         for idx in range(start, end):
             kind, label, path_obj = entries[idx]
@@ -73,10 +73,10 @@ def _tui_browse_fs(
             text.append(f"{label}\n", style=style)
 
         if end < total:
-            text.append("  ↓ ... item di bawah ...\n", style="dim")
+            text.append("  ↓ ... more items below ...\n", style="dim")
         if selected_path is not None:
-            text.append(f"\nTerpilih (●): {selected_path}", style="bold green")
-        text.append("\n↑/↓: Navigasi  •  Enter pada 📁/..: Buka folder  •  Space: Pilih (●)  •  Enter: Lanjut", style="dim")
+            text.append(f"\nSelected (●): {selected_path}", style="bold green")
+        text.append("\n↑/↓: Navigate  •  Enter on 📁/..: Open folder  •  Space: Select (●)  •  Enter: Continue", style="dim")
         return Panel(text, title=f"[bold cyan]◆ {title}[/bold cyan]", title_align="left", border_style="cyan", padding=(0, 1))
 
     try:
@@ -112,24 +112,24 @@ def _tui_browse_fs(
                         chosen = None
                         break
     except KeyboardInterrupt:
-        console.print("\n[yellow]Dibatalkan oleh pengguna.[/yellow]")
+        console.print("\n[yellow]Cancelled by user.[/yellow]")
         raise typer.Exit(code=1)
 
     if chosen is None:
-        raw_path = typer.prompt("Masukkan path lengkap", default=str(current_dir) if mode == "dir" else "")
+        raw_path = typer.prompt("Enter full path", default=str(current_dir) if mode == "dir" else "")
         chosen = Path(raw_path).expanduser().resolve()
 
     console.print(f"[bold green]✔[/bold green] [bold]{title}:[/bold] [cyan]{chosen}[/cyan]")
     return chosen
 
 
-def tui_browse_directory(title: str = "Pilih Direktori Game / Aplikasi", start_dir: Optional[Path] = None) -> Path:
+def tui_browse_directory(title: str = "Select Game / Application Directory", start_dir: Optional[Path] = None) -> Path:
     """Interactive CLI directory browser starting from current working directory."""
     return _tui_browse_fs(title=title, mode="dir", start_dir=start_dir)
 
 
 def tui_browse_file(
-    title: str = "Pilih File Installer (.exe / .msi)",
+    title: str = "Select Windows Installer (.exe / .msi)",
     start_dir: Optional[Path] = None,
     extensions: Tuple[str, ...] = (".exe", ".msi"),
 ) -> Path:
