@@ -70,7 +70,8 @@ class RunnersPage(Gtk.Box):
                 rm_btn = Gtk.Button.new_from_icon_name("user-trash-symbolic")
                 rm_btn.add_css_class("flat")
                 rm_btn.set_valign(Gtk.Align.CENTER)
-                rm_btn.connect("clicked", lambda _b, rid=r.id: self._remove_runner(rid))
+                rm_btn.set_tooltip_text("Remove runner")
+                rm_btn.connect("clicked", lambda _b, rid=r.id: self._confirm_remove_runner(rid))
                 row.add_suffix(rm_btn)
             self._list_box.append(row)
 
@@ -167,6 +168,17 @@ class RunnersPage(Gtk.Box):
             self._window.show_toast(f"Shared at {link}")
         except Exception as e:
             self._window.show_toast(f"Share failed: {e}")
+
+    def _confirm_remove_runner(self, runner_id: str) -> None:
+        dlg = Adw.AlertDialog.new(
+            f"Remove runner '{runner_id}'?",
+            "Deletes the installed runner from WineBox. Apps using it will need another runner.",
+        )
+        dlg.add_response("cancel", "Cancel")
+        dlg.add_response("remove", "Remove")
+        dlg.set_response_appearance("remove", Adw.ResponseAppearance.DESTRUCTIVE)
+        dlg.connect("response", lambda _d, resp: self._remove_runner(runner_id) if resp == "remove" else None)
+        dlg.present(self._window)
 
     def _remove_runner(self, runner_id: str) -> None:
         try:
