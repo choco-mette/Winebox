@@ -21,12 +21,6 @@ RUNNER_SOURCES: Dict[str, Dict[str, str]] = {
         "ext": ".tar.xz",
         "description": "Kron4ek Wine-Builds (Staging / TKG, standalone Wine)",
     },
-    "wine-ge": {
-        "repo": "GloriousEggroll/wine-ge-custom",
-        "kind": "wine",
-        "ext": ".tar.xz",
-        "description": "Wine-GE Custom (Legacy GloriousEggroll standalone Wine)",
-    },
     "ge-proton": {
         "repo": "GloriousEggroll/proton-ge-custom",
         "kind": "proton",

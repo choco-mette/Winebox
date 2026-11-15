@@ -18,8 +18,8 @@ Seluruh runner yang diunduh oleh WineBox tetap disimpan secara rootless di `$XDG
 ### 2. Dukungan Multi-Source & Auto-Deteksi Layout `files/`
 `RunnerAdapter` mendukung pengambilan daftar rilis dan tarball dari repositori resmi melalui GitHub Releases API (menggunakan `urllib.request` standar tanpa dependensi pihak ketiga tambahan):
 - `wine-builds` (`Kron4ek/Wine-Builds` — Wine-Staging / Wine-TKG)
-- `wine-ge` (`GloriousEggroll/wine-ge-custom`)
 - `ge-proton` (`GloriousEggroll/proton-ge-custom`)
+*(Legacy `wine-ge-custom` yang sudah EOL tetap dapat dipakai jika terpasang di Lutris lewat `winebox runner scan`.)*
 
 Untuk layout GE-Proton yang menempatkan biner di dalam subdirektori `files/bin/wine`, detektor binary otomatis mengarahkan `wine_bin` ke `files/bin/wine` sehingga `runner.wine_bin.parent.parent` otomatis memetakan `files/` ke `/app/runner` di dalam Bubblewrap tanpa mengubah `WineAdapter`.
 

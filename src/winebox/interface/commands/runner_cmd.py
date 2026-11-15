@@ -55,7 +55,7 @@ def runner_register(
 
 @runner_app.command("available")
 def runner_available(
-    source: Optional[str] = typer.Argument(None, help="Runner source key (e.g. wine-builds, wine-ge, ge-proton)"),
+    source: Optional[str] = typer.Argument(None, help="Runner source key (e.g. wine-builds, ge-proton)"),
     limit: int = typer.Option(10, "--limit", "-l", help="Maximum number of releases to display"),
 ) -> None:
     """List supported runner sources or available releases from a source."""
@@ -89,7 +89,7 @@ def runner_available(
 
 @runner_app.command("install")
 def runner_install(
-    source: Optional[str] = typer.Argument(None, help="Runner source key (e.g. wine-builds, wine-ge, ge-proton)"),
+    source: Optional[str] = typer.Argument(None, help="Runner source key (e.g. wine-builds, ge-proton)"),
     version: Optional[str] = typer.Argument(None, help="Specific release version tag (defaults to latest)"),
     share: bool = typer.Option(
         False,
