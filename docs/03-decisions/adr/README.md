@@ -30,4 +30,5 @@ Index keputusan arsitektural proyek WineBox.
 | [ADR-024](ADR-024-xdg-desktop-integration.md) | Integrasi XDG Desktop Entry (.desktop) dengan Opsi Interaktif dan Manajemen Siklus Hidup | Accepted | 2026-11-15 |
 | [ADR-025](ADR-025-emergency-prefix-process-killer.md) | Terminasi Darurat Proses Prefix dan Sanitasi Lingkungan (Kill Switch) | Accepted | 2026-11-15 |
 | [ADR-026](ADR-026-runner-manager-and-shared-ecosystem.md) | Runner Manager Terintegrasi dengan Rootless Shared Ecosystem Symlinks | Accepted | 2026-11-15 |
+| [ADR-027](ADR-027-prefix-snapshot-backup-restore.md) | Prefix Snapshot & Backup Portabel dengan Validasi Keamanan dan Atomic Staging | Accepted | 2026-11-15 |
 

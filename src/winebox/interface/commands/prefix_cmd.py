@@ -1,5 +1,6 @@
 """Wine prefix management CLI commands."""
 
+from pathlib import Path
 from typing import List, Optional
 import typer
 from rich.console import Console
@@ -259,6 +260,61 @@ def prefix_tool(
         console.print(f"[bold green]✓[/bold green] Wine tool '{target_tool}' exited cleanly.")
     except WineboxError as e:
         console.print(f"[bold red]Tool Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+
+@prefix_app.command("backup")
+def prefix_backup(
+    prefix_id: Optional[str] = typer.Argument(None, help="Prefix ID to back up (interactive if omitted)"),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Destination archive path (.tar.zst or .tar.gz)"),
+) -> None:
+    """Create a compressed snapshot backup (.tar.zst / .tar.gz) of a prefix and its savegames (ADR-027)."""
+    svc = PrefixService()
+    target_prefix = _select_winetricks_prefix(svc, prefix_id)
+
+    console.print(f"\n[bold cyan]Backing up prefix '{target_prefix}'...[/bold cyan]")
+    try:
+        archive_path = svc.backup_prefix(target_prefix, output_path=output)
+        size_mb = archive_path.stat().st_size / (1024 * 1024)
+        console.print(
+            f"[bold green]✓[/bold green] Backup saved to [bold]{archive_path}[/bold] ([dim]{size_mb:.2f} MiB[/dim])."
+        )
+    except WineboxError as e:
+        console.print(f"[bold red]Backup Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+
+@prefix_app.command("restore")
+def prefix_restore(
+    archive: Optional[Path] = typer.Argument(None, help="Path to backup archive (.tar.zst / .tar.gz)"),
+    prefix_id: Optional[str] = typer.Option(None, "--id", help="Target prefix ID (defaults to manifest ID)"),
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite target prefix if it already exists"),
+) -> None:
+    """Restore a prefix snapshot safely from a backup archive (ADR-027)."""
+    svc = PrefixService()
+    target_archive = archive
+    if target_archive is None:
+        backups = svc.list_backups()
+        if not backups:
+            console.print("[yellow]No backup archives found in WineBox backups directory.[/yellow]")
+            raise typer.Exit(code=1)
+        options = [
+            (str(b["path"]), f"{b['name']} ({b['size_bytes'] / (1024 * 1024):.2f} MiB)")
+            for b in backups
+        ]
+        chosen = tui_select("Select Prefix Backup to Restore", options, default_index=0)
+        if not chosen:
+            raise typer.Exit(code=0)
+        target_archive = Path(chosen)
+
+    console.print(f"\n[bold cyan]Restoring prefix from '{target_archive.name}'...[/bold cyan]")
+    try:
+        restored = svc.restore_prefix(target_archive, target_prefix_id=prefix_id, force=force)
+        console.print(
+            f"[bold green]✓[/bold green] Prefix '[bold cyan]{restored.id}[/bold cyan]' restored and ready."
+        )
+    except WineboxError as e:
+        console.print(f"[bold red]Restore Error:[/bold red] {e}")
         raise typer.Exit(code=1)
 
 
