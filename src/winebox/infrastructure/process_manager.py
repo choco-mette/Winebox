@@ -157,8 +157,12 @@ class ProcessManager:
         if not force:
             try:
                 os.kill(pid, signal.SIGTERM)
-            except OSError:
+            except ProcessLookupError:
                 return True
+            except PermissionError:
+                return False
+            except OSError:
+                return False
 
             deadline = time.time() + timeout
             while time.time() < deadline:
@@ -169,8 +173,12 @@ class ProcessManager:
         # Force kill
         try:
             os.kill(pid, signal.SIGKILL)
-        except OSError:
+        except ProcessLookupError:
             return True
+        except PermissionError:
+            return False
+        except OSError:
+            return False
 
         deadline = time.time() + 1.0
         while time.time() < deadline:

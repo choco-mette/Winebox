@@ -61,29 +61,30 @@ class WinetricksService:
         )
 
         with prefix_lock(p_dir):
-            builder = MountBuilder(
-                prefix_path=prefix_inner,
-                isolated_home_path=home_inner,
-                policy=policy,
-                custom_runner_dir=runner.wine_bin.parent.parent if not runner.is_system else None,
-                sandbox_workdir=f"/home/{user_name}/.wine/drive_c",
-            )
-            bwrap_args = builder.build_bwrap_args()
-            winetricks_cmd = self.adapter.build_winetricks_cmd(
-                verbs=verbs or [],
-                runner=runner,
-                unattended=unattended,
-            )
-
-            try:
-                res = self.bwrap_adapter.execute_in_sandbox(
-                    bwrap_args=bwrap_args,
-                    command_inside=winetricks_cmd,
-                    inherit_stdio=inherit_stdio,
+            with prefix_lock(self.shared_cache_dir):
+                builder = MountBuilder(
+                    prefix_path=prefix_inner,
+                    isolated_home_path=home_inner,
+                    policy=policy,
+                    custom_runner_dir=runner.wine_bin.parent.parent if not runner.is_system else None,
+                    sandbox_workdir=f"/home/{user_name}/.wine/drive_c",
+                )
+                bwrap_args = builder.build_bwrap_args()
+                winetricks_cmd = self.adapter.build_winetricks_cmd(
+                    verbs=verbs or [],
+                    runner=runner,
+                    unattended=unattended,
                 )
 
-                if res.returncode != 0:
-                    raise WineboxError(f"Winetricks execution failed with exit code {res.returncode}")
-            finally:
-                # Auto-sanitize prefix after winetricks finishes
-                PrefixAuditor.sanitize_dosdevices(prefix_inner)
+                try:
+                    res = self.bwrap_adapter.execute_in_sandbox(
+                        bwrap_args=bwrap_args,
+                        command_inside=winetricks_cmd,
+                        inherit_stdio=inherit_stdio,
+                    )
+
+                    if res.returncode != 0:
+                        raise WineboxError(f"Winetricks execution failed with exit code {res.returncode}")
+                finally:
+                    # Auto-sanitize prefix after winetricks finishes
+                    PrefixAuditor.sanitize_dosdevices(prefix_inner)

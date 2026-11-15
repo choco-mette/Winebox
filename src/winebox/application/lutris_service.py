@@ -19,6 +19,11 @@ class LutrisService:
         self.lutris_dir = self.repo.data_root / "lutris"
         self.lutris_dir.mkdir(parents=True, exist_ok=True)
 
+    @staticmethod
+    def is_available() -> bool:
+        """Returns True if the Lutris binary is installed on the host."""
+        return LutrisAdapter.find_lutris_binary() is not None
+
     def export_app_to_lutris(self, app_id: str, launch_lutris: bool = True) -> Path:
         """Generates the Lutris YAML script for an app and optionally invokes lutris --install."""
         app = self.repo.load_app(app_id)

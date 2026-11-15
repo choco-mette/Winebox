@@ -7,8 +7,6 @@ from rich.table import Table
 from winebox.application.prefix_service import PrefixService
 from winebox.application.winetricks_service import WinetricksService
 from winebox.common.exceptions import WineboxError
-from winebox.infrastructure.log_manager import LogManager
-from winebox.infrastructure.sqlite_repository import SqliteRepository
 from winebox.interface.tui import tui_multiselect, tui_select
 
 prefix_app = typer.Typer(help="Manage isolated Wine prefixes.")
@@ -119,9 +117,7 @@ def prefix_logs(
     lines: int = typer.Option(50, "--lines", "-n", help="Number of trailing log lines to display"),
 ) -> None:
     """View rotated execution logs for a Wine prefix (ADR-020)."""
-    repo = SqliteRepository()
-    log_mgr = LogManager(prefixes_dir=repo.prefixes_dir)
-    log_lines = log_mgr.read_logs(prefix_id=prefix_id, max_lines=lines)
+    log_lines = PrefixService().read_logs(prefix_id=prefix_id, max_lines=lines)
 
     if not log_lines:
         console.print(f"[dim]No logs found for prefix '{prefix_id}'.[/dim]")

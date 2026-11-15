@@ -11,22 +11,37 @@ class PrefixAuditor:
 
     @staticmethod
     def sanitize_dosdevices(prefix_path: Path) -> List[str]:
-        """Removes or neutralizes dangerous drive mappings like Z: pointing to host root."""
-        dosdevices = prefix_path / "dosdevices"
+        """Removes or neutralizes dangerous drive mappings (e.g. Z:/z: pointing outside prefix)."""
+        resolved_prefix = prefix_path.resolve()
+        dosdevices = resolved_prefix / "dosdevices"
         actions = []
         if not dosdevices.exists():
             return actions
 
-        z_drive = dosdevices / "z:"
-        if z_drive.is_symlink() or z_drive.exists():
-            try:
-                target = os.readlink(z_drive)
-                if target in ("/", "/root") or not Path(target).is_relative_to(prefix_path):
-                    z_drive.unlink(missing_ok=True)
-                    actions.append(f"Neutralized dangerous drive Z: mapping pointing to '{target}'")
-            except OSError:
-                z_drive.unlink(missing_ok=True)
-                actions.append("Removed unreadable drive Z: link")
+        for entry in list(dosdevices.iterdir()):
+            if not entry.name.endswith(":"):
+                continue
+            drive_lower = entry.name.lower()
+            if entry.is_symlink() or (drive_lower == "z:" and entry.exists()):
+                try:
+                    if entry.is_symlink():
+                        raw_target = os.readlink(entry)
+                        if os.path.isabs(raw_target):
+                            norm_target = Path(os.path.normpath(raw_target))
+                        else:
+                            norm_target = Path(os.path.normpath(str(dosdevices / raw_target)))
+                        if str(norm_target) in ("/", "/root") or not norm_target.is_relative_to(resolved_prefix):
+                            entry.unlink(missing_ok=True)
+                            actions.append(
+                                f"Neutralized dangerous drive {entry.name} mapping pointing to '{raw_target}'"
+                            )
+                    elif entry.is_file():
+                        entry.unlink(missing_ok=True)
+                        actions.append(f"Removed unexpected drive {entry.name} file")
+                except OSError:
+                    if entry.is_symlink() or entry.is_file():
+                        entry.unlink(missing_ok=True)
+                        actions.append(f"Removed unreadable drive {entry.name} link")
 
         return actions
 
@@ -64,16 +79,21 @@ class PrefixAuditor:
 
         warnings: List[str] = []
 
-        # 1. Dosdevices audit
+        # 1. Dosdevices audit (case-insensitive across drive symlinks)
         dosdevices = prefix_dir / "dosdevices"
         if dosdevices.exists():
-            z_drive = dosdevices / "z:"
-            if z_drive.is_symlink():
-                target = os.readlink(z_drive)
-                if target == "/":
-                    raise PrefixAuditError(
-                        "Prefix audit failed: drive Z: directly maps to host root '/'. Run sanitize first."
+            for entry in dosdevices.iterdir():
+                if entry.name.lower() == "z:" and entry.is_symlink():
+                    raw_target = os.readlink(entry)
+                    norm_target = (
+                        os.path.normpath(raw_target)
+                        if os.path.isabs(raw_target)
+                        else os.path.normpath(str(dosdevices / raw_target))
                     )
+                    if norm_target == "/" or not Path(norm_target).is_relative_to(prefix_dir):
+                        raise PrefixAuditError(
+                            f"Prefix audit failed: drive {entry.name} maps outside prefix ('{raw_target}'). Run sanitize first."
+                        )
 
         # 2. Symlink escape scan
         escaping = cls.scan_escaping_symlinks(prefix_dir)

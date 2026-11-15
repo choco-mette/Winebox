@@ -110,39 +110,44 @@ class ImportService:
             raise WineboxError(f"Source prefix directory not found: {resolved_src}")
 
         p_dir = self.repo.get_prefix_dir(prefix_id)
-        if p_dir.exists():
-            raise WineboxError(f"Prefix '{prefix_id}' already exists")
+        try:
+            p_dir.mkdir(parents=True, exist_ok=False)
+        except FileExistsError as e:
+            raise WineboxError(f"Prefix '{prefix_id}' already exists") from e
 
         stage_dir = self.repo.staging_dir / f"prefix_{uuid.uuid4().hex}"
         try:
-            FilesystemAdapter.copy_directory(resolved_src, stage_dir)
+            with prefix_lock(p_dir):
+                FilesystemAdapter.copy_directory(resolved_src, stage_dir)
 
-            # Sanitize drive mappings (Z: host root removal)
-            PrefixAuditor.sanitize_dosdevices(stage_dir)
+                # Sanitize drive mappings (Z: host root removal)
+                PrefixAuditor.sanitize_dosdevices(stage_dir)
 
-            # Audit prefix
-            PrefixAuditor.audit_prefix(stage_dir, check_registry=False)
+                # Audit prefix
+                PrefixAuditor.audit_prefix(stage_dir, check_registry=False)
 
-            # Prepare WineBox prefix structure
-            p_dir.mkdir(parents=True, exist_ok=True)
-            prefix_target = p_dir / "prefix"
-            home_target = p_dir / "home"
-            logs_target = p_dir / "logs"
+                # Prepare WineBox prefix structure
+                prefix_target = p_dir / "prefix"
+                home_target = p_dir / "home"
+                logs_target = p_dir / "logs"
 
-            home_target.mkdir(parents=True, exist_ok=True)
-            logs_target.mkdir(parents=True, exist_ok=True)
+                home_target.mkdir(parents=True, exist_ok=True)
+                logs_target.mkdir(parents=True, exist_ok=True)
 
-            FilesystemAdapter.atomic_move(stage_dir, prefix_target)
+                FilesystemAdapter.atomic_move(stage_dir, prefix_target)
+
+                prefix = Prefix(
+                    id=prefix_id,
+                    name=name or prefix_id,
+                    runner_id=runner_id,
+                    origin=PrefixOrigin.IMPORTED,
+                    status=PrefixStatus.READY,
+                )
+                self.repo.save_prefix(prefix)
+                return prefix
+        except Exception:
+            FilesystemAdapter.remove_tree(p_dir)
+            raise
         finally:
             FilesystemAdapter.remove_tree(stage_dir)
-
-        prefix = Prefix(
-            id=prefix_id,
-            name=name or prefix_id,
-            runner_id=runner_id,
-            origin=PrefixOrigin.IMPORTED,
-            status=PrefixStatus.READY,
-        )
-        self.repo.save_prefix(prefix)
-        return prefix
 

@@ -1,6 +1,8 @@
 """Snapshot synchronization (metadata.json) and legacy TOML migration helpers (ADR-020)."""
 
 import json
+import os
+import sqlite3
 import tomllib
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
@@ -48,8 +50,10 @@ def write_prefix_snapshot(repo: "SqliteRepository", prefix_id: str) -> None:
         }
 
         snap_file = p_dir / "metadata.json"
-        snap_file.write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
-    except Exception:
+        tmp_file = snap_file.with_suffix(".json.tmp")
+        tmp_file.write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
+        os.replace(tmp_file, snap_file)
+    except (OSError, sqlite3.Error, ValueError, KeyError):
         pass
 
 
@@ -79,7 +83,7 @@ def import_legacy_toml_if_needed(repo: "SqliteRepository") -> None:
                         ),
                     )
                     repo.save_prefix(prefix)
-                except Exception:
+                except (OSError, sqlite3.Error, ValueError, KeyError, tomllib.TOMLDecodeError):
                     pass
 
     if repo.apps_dir.exists():
@@ -101,6 +105,6 @@ def import_legacy_toml_if_needed(repo: "SqliteRepository") -> None:
                     status=AppStatus(app_info.get("status", "ready")),
                 )
                 repo.save_app(app)
-            except Exception:
+            except (OSError, sqlite3.Error, ValueError, KeyError, tomllib.TOMLDecodeError):
                 pass
 

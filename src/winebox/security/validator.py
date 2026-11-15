@@ -18,8 +18,30 @@ class PolicyValidator:
         Path("/sys"),
         Path("/boot"),
         Path("/var"),
+        Path("/proc"),
+        Path("/dev"),
         Path("/media"),
         Path("/mnt"),
+    }
+
+    # System prefixes where any subpath access is also prohibited
+    SUBPATH_RESTRICTED_PREFIXES: Set[Path] = {
+        Path("/root"),
+        Path("/etc"),
+        Path("/sys"),
+        Path("/boot"),
+        Path("/var"),
+        Path("/proc"),
+        Path("/dev"),
+    }
+
+    # Sensitive environment variables that must not be overridden via policy.env_vars
+    RESTRICTED_ENV_KEYS: Set[str] = {
+        "LD_PRELOAD",
+        "LD_LIBRARY_PATH",
+        "WINEPREFIX",
+        "HOME",
+        "PATH",
     }
 
     # Critical sandbox paths that must NEVER be shadowed by custom host mounts
@@ -75,11 +97,16 @@ class PolicyValidator:
             # Not inside host home
             pass
 
-        # Disallow system directories
+        # Disallow system directories and sensitive system subpaths
         for restricted in self.RESTRICTED_PREFIXES:
             if restricted != Path("/") and host_path == restricted:
                 raise PolicyValidationError(
                     f"Mounting system directory '{restricted}' directly is strictly prohibited"
+                )
+        for sys_restricted in self.SUBPATH_RESTRICTED_PREFIXES:
+            if host_path.is_relative_to(sys_restricted):
+                raise PolicyValidationError(
+                    f"Access to restricted system path '{host_path}' is strictly prohibited"
                 )
 
         # Validate sandbox mount destination lexically (do not resolve host symlinks)
@@ -108,4 +135,9 @@ class PolicyValidator:
         """Validates all aspects of a SecurityPolicy."""
         for mount in policy.host_mounts:
             self.validate_mount(mount)
+        for env_key in policy.env_vars:
+            if env_key in self.RESTRICTED_ENV_KEYS:
+                raise PolicyValidationError(
+                    f"Overriding restricted environment variable '{env_key}' is strictly prohibited"
+                )
 

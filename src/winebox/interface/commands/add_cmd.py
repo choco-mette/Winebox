@@ -13,7 +13,6 @@ from winebox.application.lutris_service import LutrisService
 from winebox.application.prefix_service import PrefixService
 from winebox.application.profile_service import ProfileService
 from winebox.common.exceptions import WineboxError
-from winebox.infrastructure.lutris_adapter import LutrisAdapter
 from winebox.interface.tui import slugify, tui_browse_directory, tui_browse_file, tui_select
 
 console = Console()
@@ -151,7 +150,7 @@ def add_wizard(
                 )
 
         # Step 6: Optional Lutris Integration (ADR-022)
-        if (mode == "portable" or chosen_exe != "__skip__") and LutrisAdapter.find_lutris_binary():
+        if (mode == "portable" or chosen_exe != "__skip__") and LutrisService.is_available():
             lutris_choice = tui_select(
                 "Add Game to Lutris Library?",
                 [

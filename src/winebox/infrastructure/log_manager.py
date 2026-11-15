@@ -1,9 +1,10 @@
 """Log manager for automatic rotating file logs per prefix (ADR-020)."""
 
 import logging
+from collections import deque
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 
 class LogManager:
@@ -15,54 +16,57 @@ class LogManager:
     def __init__(self, prefixes_dir: Path) -> None:
         self.prefixes_dir = prefixes_dir.resolve()
 
-    def get_log_file(self, prefix_id: str) -> Path:
+    def get_log_file(self, prefix_id: str, create_dir: bool = True) -> Path:
         log_dir = self.prefixes_dir / prefix_id / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
+        if create_dir:
+            log_dir.mkdir(parents=True, exist_ok=True)
         return log_dir / "execution.log"
 
-    def get_logger(self, prefix_id: str) -> logging.Logger:
-        logger_name = f"winebox.prefix.{prefix_id}"
-        logger = logging.getLogger(logger_name)
-        logger.setLevel(logging.INFO)
-
-        # Avoid duplicate handlers if logger is reused
-        if not logger.handlers:
-            log_file = self.get_log_file(prefix_id)
-            handler = RotatingFileHandler(
-                filename=str(log_file),
-                maxBytes=self.MAX_BYTES,
-                backupCount=self.BACKUP_COUNT,
-                encoding="utf-8",
-            )
-            formatter = logging.Formatter(
-                fmt="[%(asctime)s] [%(levelname)s] %(message)s",
-                datefmt="%Y-%m-%d %H:%M:%S",
-            )
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
-
-        return logger
+    def _create_handler(self, log_file: Path) -> RotatingFileHandler:
+        handler = RotatingFileHandler(
+            filename=str(log_file),
+            maxBytes=self.MAX_BYTES,
+            backupCount=self.BACKUP_COUNT,
+            encoding="utf-8",
+        )
+        formatter = logging.Formatter(
+            fmt="[%(asctime)s] [%(levelname)s] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+        handler.setFormatter(formatter)
+        return handler
 
     def log_execution(self, prefix_id: str, app_id: str, stdout: str, stderr: str, exit_code: int) -> None:
-        logger = self.get_logger(prefix_id)
-        logger.info(f"--- Application '{app_id}' Started ---")
-        if stdout:
-            for line in stdout.strip().splitlines():
-                logger.info(f"[STDOUT] {line}")
-        if stderr:
-            for line in stderr.strip().splitlines():
-                logger.warning(f"[STDERR] {line}")
-        logger.info(f"--- Application '{app_id}' Finished with Exit Code {exit_code} ---")
+        log_file = self.get_log_file(prefix_id, create_dir=True)
+        logger_name = f"winebox.prefix.{self.prefixes_dir}.{prefix_id}"
+        logger = logging.getLogger(logger_name)
+        logger.setLevel(logging.INFO)
+        logger.propagate = False
+
+        handler = self._create_handler(log_file)
+        logger.addHandler(handler)
+        try:
+            logger.info(f"--- Application '{app_id}' Started ---")
+            if stdout:
+                for line in stdout.strip().splitlines():
+                    logger.info(f"[STDOUT] {line}")
+            if stderr:
+                for line in stderr.strip().splitlines():
+                    logger.warning(f"[STDERR] {line}")
+            logger.info(f"--- Application '{app_id}' Finished with Exit Code {exit_code} ---")
+        finally:
+            handler.flush()
+            handler.close()
+            logger.removeHandler(handler)
 
     def read_logs(self, prefix_id: str, max_lines: int = 50) -> List[str]:
-        log_file = self.get_log_file(prefix_id)
+        log_file = self.get_log_file(prefix_id, create_dir=False)
         if not log_file.exists():
             return []
 
         try:
             with open(log_file, "r", encoding="utf-8", errors="replace") as f:
-                lines = f.readlines()
-                return [line.rstrip() for line in lines[-max_lines:]]
-        except Exception:
+                tail = deque(f, maxlen=max_lines)
+                return [line.rstrip() for line in tail]
+        except OSError:
             return []
-
