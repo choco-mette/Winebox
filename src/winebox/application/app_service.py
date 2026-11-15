@@ -5,6 +5,7 @@ from winebox.application.desktop_service import DesktopService
 from winebox.common.exceptions import WineboxError
 from winebox.domain.models import Application, SecurityPolicy
 from winebox.infrastructure.sqlite_repository import SqliteRepository
+from winebox.security.validator import PolicyValidator
 
 
 class AppService:
@@ -40,6 +41,42 @@ class AppService:
             arguments=arguments or [],
             policy=policy or SecurityPolicy(),
         )
+        self.repo.save_app(app)
+        return app
+
+    def update_app(
+        self,
+        app_id: str,
+        name: Optional[str] = None,
+        exe_path: Optional[str] = None,
+        runner_id: Optional[str] = None,
+        profile_id: Optional[str] = None,
+        arguments: Optional[List[str]] = None,
+        policy: Optional[SecurityPolicy] = None,
+    ) -> Application:
+        """Update registered application metadata, runner, launch arguments, or security policy."""
+        app = self.repo.load_app(app_id)
+        if name is not None:
+            cleaned = name.strip()
+            if not cleaned:
+                raise WineboxError("Application name cannot be empty.")
+            app.name = cleaned
+        if exe_path is not None:
+            cleaned_exe = exe_path.strip()
+            if not cleaned_exe:
+                raise WineboxError("Executable path cannot be empty.")
+            app.exe_path = cleaned_exe
+        if runner_id is not None:
+            self.repo.load_runner(runner_id)
+            app.runner_id = runner_id
+        if profile_id is not None:
+            self.repo.load_profile(profile_id)
+            app.profile_id = profile_id
+        if arguments is not None:
+            app.arguments = list(arguments)
+        if policy is not None:
+            PolicyValidator().validate_policy(policy)
+            app.policy = policy
         self.repo.save_app(app)
         return app
 

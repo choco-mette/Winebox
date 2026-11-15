@@ -1,4 +1,4 @@
-"""Mount builder for generating deterministic Bubblewrap command line arguments."""
+b"""Mount builder for generating deterministic Bubblewrap command line arguments."""
 
 import os
 from pathlib import Path

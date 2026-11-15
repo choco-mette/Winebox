@@ -84,11 +84,29 @@ class TestGuiCliAndApp(unittest.TestCase):
             self.skipTest("GTK4 / Libadwaita not available")
 
         from gi.repository import Gio
+        from winebox.domain.models import HostMount, MountMode, Prefix, SecurityPolicy
         from winebox.interface.gui.app import WineboxGuiApp
+        from winebox.interface.gui.widgets.configure_app_dialog import ConfigureAppDialog
 
         with tempfile.TemporaryDirectory() as tmp:
             repo = SqliteRepository(data_root=Path(tmp) / "data", config_root=Path(tmp) / "cfg")
-            gui_app = WineboxGuiApp(services=ServiceContainer(repo=repo))
+            services = ServiceContainer(repo=repo)
+            repo.save_prefix(Prefix(id="pfx-gui", name="pfx-gui"))
+            app_obj = services.app_svc.register_app(
+                app_id="demo-app",
+                name="Demo App",
+                prefix_id="pfx-gui",
+                exe_path="drive_c/demo.exe",
+                arguments=["-windowed"],
+                policy=SecurityPolicy(
+                    hidraw=True,
+                    mic=False,
+                    env_vars={"DXVK_HUD": "fps"},
+                    host_mounts=[HostMount(host_path=Path(tmp), sandbox_path=Path("/mnt/save"), mode=MountMode.RO)],
+                ),
+            )
+
+            gui_app = WineboxGuiApp(services=services)
             gui_app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
             self.assertEqual(gui_app.get_application_id(), "id.winebox.WineBox")
             gui_app.register(None)
@@ -97,7 +115,70 @@ class TestGuiCliAndApp(unittest.TestCase):
             assert win is not None
             for page in win.pages.values():
                 page.refresh()
+
+            dlg = ConfigureAppDialog(
+                parent_window=win,
+                services=services,
+                app_obj=app_obj,
+                on_saved=lambda _msg: None,
+            )
+            self.assertIsNotNone(dlg._stack.get_child_by_name("app"))
+            self.assertIsNotNone(dlg._stack.get_child_by_name("sandbox"))
+            self.assertIsNotNone(dlg._stack.get_child_by_name("system"))
+            win.open_prefix_files("pfx-gui")
             win.close()
+
+    def test_app_service_update_app_and_policy_validation(self) -> None:
+        from winebox.common.exceptions import PolicyValidationError
+        from winebox.domain.models import HostMount, MountMode, Prefix, SecurityPolicy
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = SqliteRepository(data_root=Path(tmp) / "data", config_root=Path(tmp) / "cfg")
+            services = ServiceContainer(repo=repo)
+            repo.save_prefix(Prefix(id="pfx-upd", name="pfx-upd"))
+            services.app_svc.register_app(
+                app_id="upd-app",
+                name="Old Name",
+                prefix_id="pfx-upd",
+                exe_path="drive_c/old.exe",
+            )
+
+            save_dir = Path(tmp) / "saves"
+            save_dir.mkdir()
+            updated = services.app_svc.update_app(
+                "upd-app",
+                name="New Name",
+                exe_path="drive_c/new.exe",
+                arguments=["-dx11", "--fps=60"],
+                profile_id="balanced",
+                policy=SecurityPolicy(
+                    display=True,
+                    audio=True,
+                    network=False,
+                    gpu=True,
+                    gamepad=True,
+                    hidraw=True,
+                    mic=True,
+                    env_vars={"DXVK_HUD": "fps"},
+                    host_mounts=[HostMount(host_path=save_dir, sandbox_path=Path("/mnt/saves"), mode=MountMode.RW)],
+                ),
+            )
+            self.assertEqual(updated.name, "New Name")
+            self.assertEqual(updated.exe_path, "drive_c/new.exe")
+            self.assertEqual(updated.arguments, ["-dx11", "--fps=60"])
+            self.assertEqual(updated.profile_id, "balanced")
+            self.assertTrue(updated.policy.hidraw)
+            self.assertTrue(updated.policy.mic)
+            self.assertEqual(updated.policy.env_vars, {"DXVK_HUD": "fps"})
+            self.assertEqual(len(updated.policy.host_mounts), 1)
+
+            with self.assertRaises(PolicyValidationError):
+                services.app_svc.update_app(
+                    "upd-app",
+                    policy=SecurityPolicy(
+                        host_mounts=[HostMount(host_path=Path("/etc"), sandbox_path=Path("/mnt/etc"), mode=MountMode.RO)]
+                    ),
+                )
 
 
 if __name__ == "__main__":

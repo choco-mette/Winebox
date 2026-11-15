@@ -1,14 +1,16 @@
-"""Library page displaying registered Windows applications and quick launch controls."""
+"""Library page displaying registered Windows applications and Lutris-style quick controls."""
 
 from gi.repository import Adw, Gtk
+from winebox.domain.models import Application
 from winebox.infrastructure.process_manager import PrefixLock
 from winebox.interface.gui.state import run_async
 from winebox.interface.gui.widgets.add_app_dialog import AddAppDialog
+from winebox.interface.gui.widgets.configure_app_dialog import ConfigureAppDialog
 from winebox.interface.gui.widgets.log_viewer_dialog import LogViewerDialog
 
 
 class LibraryPage(Gtk.Box):
-    """Displays registered apps with search, launch/kill, logs, and desktop shortcut toggle."""
+    """Displays registered apps with search, Play/Kill, Configure, and overflow actions."""
 
     def __init__(self, window: Adw.ApplicationWindow) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -87,25 +89,64 @@ class LibraryPage(Gtk.Box):
                 play_btn.connect("clicked", lambda _b, aid=app_obj.id: self._run_app(aid))
                 row.add_suffix(play_btn)
 
-            logs_btn = Gtk.Button(label="Logs")
-            logs_btn.set_valign(Gtk.Align.CENTER)
-            logs_btn.connect("clicked", lambda _b, pid=app_obj.prefix_id: self._show_logs(pid))
-            row.add_suffix(logs_btn)
+            cfg_btn = Gtk.Button.new_from_icon_name("emblem-system-symbolic")
+            cfg_btn.set_valign(Gtk.Align.CENTER)
+            cfg_btn.set_tooltip_text("Configure application")
+            cfg_btn.connect("clicked", lambda _b, obj=app_obj: self._open_configure(obj))
+            row.add_suffix(cfg_btn)
 
-            del_btn = Gtk.Button.new_from_icon_name("user-trash-symbolic")
-            del_btn.add_css_class("flat")
-            del_btn.set_valign(Gtk.Align.CENTER)
-            del_btn.set_tooltip_text("Remove registration")
-            del_btn.connect("clicked", lambda _b, aid=app_obj.id: self._remove_app(aid))
-            row.add_suffix(del_btn)
-
+            row.add_suffix(self._build_overflow_button(app_obj))
             self._list_box.append(row)
+
+    def _build_overflow_button(self, app_obj: Application) -> Gtk.MenuButton:
+        menu_btn = Gtk.MenuButton(icon_name="view-more-symbolic", valign=Gtk.Align.CENTER)
+        menu_btn.add_css_class("flat")
+        menu_btn.set_tooltip_text("More actions")
+
+        popover = Gtk.Popover()
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        box.set_margin_top(6)
+        box.set_margin_bottom(6)
+        box.set_margin_start(6)
+        box.set_margin_end(6)
+
+        has_shortcut = self._window.services.desktop_svc.desktop_entry_exists(app_obj.id)
+        shortcut_label = "Remove Desktop Shortcut" if has_shortcut else "Create Desktop Shortcut"
+
+        actions = (
+            ("View Logs", lambda: self._show_logs(app_obj.prefix_id), False),
+            ("Open Prefix Files", lambda: self._window.open_prefix_files(app_obj.prefix_id), False),
+            ("Winecfg", lambda: self._run_wine_tool(app_obj.prefix_id, "winecfg"), False),
+            ("Winetricks", lambda: self._run_winetricks(app_obj.prefix_id), False),
+            (shortcut_label, lambda: self._toggle_shortcut(app_obj.id, has_shortcut), False),
+            ("Remove from Library", lambda: self._confirm_remove_app(app_obj), True),
+        )
+        for label, cb, is_destructive in actions:
+            btn = Gtk.Button(label=label, halign=Gtk.Align.FILL)
+            btn.add_css_class("flat")
+            if is_destructive:
+                btn.add_css_class("destructive-action")
+            btn.connect("clicked", lambda _b, p=popover, fn=cb: (p.popdown(), fn()))
+            box.append(btn)
+
+        popover.set_child(box)
+        menu_btn.set_popover(popover)
+        return menu_btn
 
     def _on_add_app(self, *_args: object) -> None:
         dlg = AddAppDialog(
             parent_window=self._window,
             services=self._window.services,
             on_added=lambda msg: (self._window.show_toast(msg), self.refresh()),
+        )
+        dlg.present(self._window)
+
+    def _open_configure(self, app_obj: Application) -> None:
+        dlg = ConfigureAppDialog(
+            parent_window=self._window,
+            services=self._window.services,
+            app_obj=app_obj,
+            on_saved=lambda msg: (self._window.show_toast(msg), self.refresh()),
         )
         dlg.present(self._window)
 
@@ -124,9 +165,55 @@ class LibraryPage(Gtk.Box):
             on_error=lambda e: self._window.show_toast(f"Kill failed: {e}"),
         )
 
+    def _run_wine_tool(self, prefix_id: str, tool_name: str) -> None:
+        self._window.show_toast(f"Launching {tool_name} in '{prefix_id}'...")
+        run_async(
+            lambda: self._window.services.prefix_runtime.run_tool(prefix_id, tool_name, inherit_stdio=False),
+            on_success=lambda _: (self._window.show_toast(f"{tool_name} closed"), self.refresh()),
+            on_error=lambda e: self._window.show_toast(f"{tool_name} error: {e}"),
+        )
+
+    def _run_winetricks(self, prefix_id: str) -> None:
+        self._window.show_toast(f"Launching Winetricks in '{prefix_id}'...")
+        run_async(
+            lambda: self._window.services.winetricks_svc.run_winetricks(
+                prefix_id, unattended=False, inherit_stdio=False
+            ),
+            on_success=lambda _: (self._window.show_toast("Winetricks closed"), self.refresh()),
+            on_error=lambda e: self._window.show_toast(f"Winetricks error: {e}"),
+        )
+
+    def _toggle_shortcut(self, app_id: str, exists: bool) -> None:
+        try:
+            if exists:
+                self._window.services.desktop_svc.remove_desktop_entry(app_id)
+                self._window.show_toast(f"Removed desktop shortcut for '{app_id}'")
+            else:
+                self._window.services.desktop_svc.create_desktop_entry(app_id)
+                self._window.show_toast(f"Created desktop shortcut for '{app_id}'")
+            self.refresh()
+        except Exception as e:
+            self._window.show_toast(f"Shortcut error: {e}")
+
     def _show_logs(self, prefix_id: str) -> None:
         lines = self._window.services.prefix_lifecycle.read_logs(prefix_id, max_lines=100)
         LogViewerDialog(prefix_id, lines).present(self._window)
+
+    def _confirm_remove_app(self, app_obj: Application) -> None:
+        dlg = Adw.AlertDialog.new(
+            f"Remove '{app_obj.name}'?",
+            "Removes the application registration from Library (prefix files on disk are preserved).",
+        )
+        dlg.add_response("cancel", "Cancel")
+        dlg.add_response("remove", "Remove")
+        dlg.set_response_appearance("remove", Adw.ResponseAppearance.DESTRUCTIVE)
+
+        def _on_resp(_d: Adw.AlertDialog, resp: str) -> None:
+            if resp == "remove":
+                self._remove_app(app_obj.id)
+
+        dlg.connect("response", _on_resp)
+        dlg.present(self._window)
 
     def _remove_app(self, app_id: str) -> None:
         try:

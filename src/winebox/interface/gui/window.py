@@ -95,6 +95,16 @@ class WineboxMainWindow(Adw.ApplicationWindow):
         if hasattr(page, "refresh"):
             page.refresh()
 
+    def open_prefix_files(self, prefix_id: str) -> None:
+        """Navigate to the Prefixes page and focus the requested prefix in the File Manager."""
+        for row, (key, _title) in self._row_to_key.items():
+            if key == "prefixes":
+                self.nav_list.select_row(row)
+                break
+        prefixes_page = self.pages.get("prefixes")
+        if hasattr(prefixes_page, "select_prefix"):
+            prefixes_page.select_prefix(prefix_id)
+
     def show_toast(self, message: str) -> None:
         self.toast_overlay.add_toast(Adw.Toast.new(message))
 

@@ -78,6 +78,14 @@ class PrefixesPage(Gtk.Box):
             self._prefix_dropdown.set_selected(0)
         self._update_selected_view()
 
+    def select_prefix(self, prefix_id: str) -> None:
+        """Select the given prefix in the dropdown and load its file manager view."""
+        if prefix_id not in self._prefix_ids:
+            self.refresh()
+        if prefix_id in self._prefix_ids:
+            self._prefix_dropdown.set_selected(self._prefix_ids.index(prefix_id))
+            self._update_selected_view()
+
     def _on_prefix_changed(self, *_args: object) -> None:
         self._update_selected_view()
 
