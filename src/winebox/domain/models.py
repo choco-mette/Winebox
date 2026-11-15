@@ -78,6 +78,17 @@ class SecurityPolicy:
 
 
 @dataclass
+class ShortcutSettings:
+    menu_enabled: bool = False
+    desktop_enabled: bool = False
+    icon: str = ""
+    categories: str = "Game;Utility;"
+    comment: str = ""
+    terminal: bool = False
+    startup_wm_class: str = ""
+
+
+@dataclass
 class Application:
     id: str
     name: str
@@ -87,6 +98,7 @@ class Application:
     profile_id: str = "permissive"
     arguments: List[str] = field(default_factory=list)
     policy: SecurityPolicy = field(default_factory=SecurityPolicy)
+    shortcut: ShortcutSettings = field(default_factory=ShortcutSettings)
     status: AppStatus = AppStatus.READY
     last_run_at: Optional[datetime] = None
     last_exit_code: Optional[int] = None

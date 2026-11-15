@@ -3,7 +3,7 @@
 from typing import Any, Dict, List, Optional
 from winebox.application.desktop_service import DesktopService
 from winebox.common.exceptions import WineboxError
-from winebox.domain.models import Application, SecurityPolicy
+from winebox.domain.models import Application, SecurityPolicy, ShortcutSettings
 from winebox.infrastructure.sqlite_repository import SqliteRepository
 from winebox.security.validator import PolicyValidator
 
@@ -53,8 +53,9 @@ class AppService:
         profile_id: Optional[str] = None,
         arguments: Optional[List[str]] = None,
         policy: Optional[SecurityPolicy] = None,
+        shortcut: Optional[ShortcutSettings] = None,
     ) -> Application:
-        """Update registered application metadata, runner, launch arguments, or security policy."""
+        """Update registered application metadata, runner, launch arguments, policy, or shortcut."""
         app = self.repo.load_app(app_id)
         if name is not None:
             cleaned = name.strip()
@@ -77,12 +78,16 @@ class AppService:
         if policy is not None:
             PolicyValidator().validate_policy(policy)
             app.policy = policy
+        if shortcut is not None:
+            app.shortcut = shortcut
         self.repo.save_app(app)
         return app
 
     def remove_app(self, app_id: str) -> None:
         try:
-            DesktopService(self.repo).remove_desktop_entry(app_id)
+            ds = DesktopService(self.repo)
+            ds.remove_desktop_entry(app_id)
+            ds.remove_desktop_icon(app_id)
         except (OSError, WineboxError):
             pass
         self.repo.delete_app(app_id)

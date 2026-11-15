@@ -125,8 +125,64 @@ class TestGuiCliAndApp(unittest.TestCase):
             self.assertIsNotNone(dlg._stack.get_child_by_name("app"))
             self.assertIsNotNone(dlg._stack.get_child_by_name("sandbox"))
             self.assertIsNotNone(dlg._stack.get_child_by_name("system"))
+            self.assertIsNotNone(dlg._stack.get_child_by_name("shortcut"))
             win.open_prefix_files("pfx-gui")
             win.close()
+
+    def test_shortcut_settings_sqlite_persistence_and_sync(self) -> None:
+        from winebox.application.desktop_service import DesktopService
+        from winebox.domain.models import Prefix, ShortcutSettings
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = SqliteRepository(data_root=root / "data", config_root=root / "cfg")
+            services = ServiceContainer(repo=repo)
+            repo.save_prefix(Prefix(id="pfx-sc", name="pfx-sc"))
+            services.app_svc.register_app(
+                app_id="sc-app",
+                name="Shortcut App",
+                prefix_id="pfx-sc",
+                exe_path="drive_c/sc.exe",
+            )
+
+            sc = ShortcutSettings(
+                menu_enabled=True,
+                desktop_enabled=True,
+                icon="steam",
+                categories="Game;",
+                comment="Launch Shortcut App",
+                terminal=True,
+                startup_wm_class="sc.exe",
+            )
+            services.app_svc.update_app("sc-app", shortcut=sc)
+            reloaded = repo.load_app("sc-app")
+            self.assertEqual(reloaded.shortcut, sc)
+
+            apps_dir = root / "applications"
+            desktop_dir = root / "Desktop"
+            ds = DesktopService(repo=repo, apps_dir=apps_dir, desktop_dir=desktop_dir)
+            paths = ds.sync_shortcuts("sc-app")
+            self.assertIsNotNone(paths["menu"])
+            self.assertIsNotNone(paths["desktop"])
+            assert paths["menu"] is not None and paths["desktop"] is not None
+            self.assertTrue(paths["menu"].exists())
+            self.assertTrue(paths["desktop"].exists())
+            self.assertTrue(os.access(paths["desktop"], os.X_OK))
+
+            content = paths["desktop"].read_text(encoding="utf-8")
+            self.assertIn("Icon=steam", content)
+            self.assertIn("Terminal=true", content)
+            self.assertIn("StartupWMClass=sc.exe", content)
+            self.assertIn("Categories=Game;", content)
+
+            services.app_svc.update_app(
+                "sc-app",
+                shortcut=ShortcutSettings(menu_enabled=False, desktop_enabled=False, icon="steam"),
+            )
+            ds.sync_shortcuts("sc-app")
+            self.assertFalse(paths["menu"].exists())
+            self.assertFalse(paths["desktop"].exists())
+            self.assertEqual(repo.load_app("sc-app").shortcut.icon, "steam")
 
     def test_app_service_update_app_and_policy_validation(self) -> None:
         from winebox.common.exceptions import PolicyValidationError

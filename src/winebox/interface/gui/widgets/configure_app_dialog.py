@@ -4,7 +4,14 @@ import shlex
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 from gi.repository import Adw, Gio, Gtk
-from winebox.domain.models import Application, HostMount, MountMode, SecurityPolicy, SecurityProfile
+from winebox.domain.models import (
+    Application,
+    HostMount,
+    MountMode,
+    SecurityPolicy,
+    SecurityProfile,
+    ShortcutSettings,
+)
 from winebox.interface.gui.state import ServiceContainer
 
 
@@ -70,6 +77,7 @@ class ConfigureAppDialog(Adw.Dialog):
         self._build_app_tab()
         self._build_sandbox_tab()
         self._build_system_tab()
+        self._build_shortcut_tab()
         toolbar.set_content(self._stack)
 
     def _build_app_tab(self) -> None:
@@ -278,6 +286,87 @@ class ConfigureAppDialog(Adw.Dialog):
 
         dlg.open(self._parent, None, _on_chosen)
 
+    def _build_shortcut_tab(self) -> None:
+        page = Adw.PreferencesPage()
+        sc = self._app.shortcut
+
+        place_group = Adw.PreferencesGroup(
+            title="Shortcut Placement",
+            description="Choose where WineBox generates and syncs .desktop launchers.",
+        )
+        self._menu_switch = Adw.SwitchRow(
+            title="Application Menu",
+            subtitle="Install to XDG applications menu (~/.local/share/applications)",
+        )
+        self._menu_switch.set_active(
+            sc.menu_enabled or self._services.desktop_svc.desktop_entry_exists(self._app.id)
+        )
+        place_group.add(self._menu_switch)
+
+        self._desktop_switch = Adw.SwitchRow(
+            title="Desktop Folder Icon",
+            subtitle="Create clickable .desktop icon in Desktop folder (KDE, XFCE, Cinnamon, MATE, GNOME DING)",
+        )
+        self._desktop_switch.set_active(
+            sc.desktop_enabled or self._services.desktop_svc.desktop_icon_exists(self._app.id)
+        )
+        place_group.add(self._desktop_switch)
+        page.add(place_group)
+
+        meta_group = Adw.PreferencesGroup(
+            title="Appearance and Launch",
+            description="Persisted in SQLite and synced to generated .desktop files on Save.",
+        )
+        self._sc_icon_row = Adw.EntryRow(title="Icon (theme name or image path)")
+        self._sc_icon_row.set_text(sc.icon)
+        icon_btn = Gtk.Button(label="Browse...")
+        icon_btn.set_valign(Gtk.Align.CENTER)
+        icon_btn.connect("clicked", self._on_browse_icon)
+        self._sc_icon_row.add_suffix(icon_btn)
+        meta_group.add(self._sc_icon_row)
+
+        self._sc_cat_row = Adw.EntryRow(title="Categories (semicolon-separated)")
+        self._sc_cat_row.set_text(sc.categories or "Game;Utility;")
+        meta_group.add(self._sc_cat_row)
+
+        self._sc_comment_row = Adw.EntryRow(title="Comment / Description")
+        self._sc_comment_row.set_text(sc.comment)
+        meta_group.add(self._sc_comment_row)
+
+        self._sc_terminal_switch = Adw.SwitchRow(
+            title="Run in Terminal",
+            subtitle="Set Terminal=true to inspect console stdout/stderr",
+        )
+        self._sc_terminal_switch.set_active(sc.terminal)
+        meta_group.add(self._sc_terminal_switch)
+
+        self._sc_wmclass_row = Adw.EntryRow(title="StartupWMClass (optional)")
+        self._sc_wmclass_row.set_text(sc.startup_wm_class)
+        meta_group.add(self._sc_wmclass_row)
+
+        page.add(meta_group)
+        self._stack.add_titled_with_icon(page, "shortcut", "Shortcut", "starred-symbolic")
+
+    def _on_browse_icon(self, *_args: object) -> None:
+        dlg = Gtk.FileDialog(title="Select Shortcut Icon (.png / .svg / .ico)")
+        img_filter = Gtk.FileFilter()
+        img_filter.set_name("Icon Images")
+        for pat in ("*.png", "*.svg", "*.ico", "*.xpm"):
+            img_filter.add_pattern(pat)
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(img_filter)
+        dlg.set_filters(filters)
+
+        def _on_chosen(dialog: Gtk.FileDialog, res: Gio.AsyncResult) -> None:
+            try:
+                gfile = dialog.open_finish(res)
+                if gfile and gfile.get_path():
+                    self._sc_icon_row.set_text(gfile.get_path())
+            except Exception:
+                pass
+
+        dlg.open(self._parent, None, _on_chosen)
+
     def _on_save_clicked(self, *_args: object) -> None:
         args_raw = self._args_row.get_text().strip()
         try:
@@ -311,6 +400,16 @@ class ConfigureAppDialog(Adw.Dialog):
             env_vars=dict(self._env_vars),
         )
 
+        shortcut = ShortcutSettings(
+            menu_enabled=self._menu_switch.get_active(),
+            desktop_enabled=self._desktop_switch.get_active(),
+            icon=self._sc_icon_row.get_text().strip(),
+            categories=self._sc_cat_row.get_text().strip() or "Game;Utility;",
+            comment=self._sc_comment_row.get_text().strip(),
+            terminal=self._sc_terminal_switch.get_active(),
+            startup_wm_class=self._sc_wmclass_row.get_text().strip(),
+        )
+
         try:
             updated = self._services.app_svc.update_app(
                 self._app.id,
@@ -320,7 +419,9 @@ class ConfigureAppDialog(Adw.Dialog):
                 profile_id=profile_id,
                 arguments=parsed_args,
                 policy=policy,
+                shortcut=shortcut,
             )
+            self._services.desktop_svc.sync_shortcuts(updated.id)
             self._on_saved(f"Updated '{updated.name}'")
             self.close()
         except Exception as e:

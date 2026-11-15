@@ -85,6 +85,7 @@ SCHEMA_DDL = [
         runner_id TEXT NOT NULL DEFAULT 'system-wine',
         profile_id TEXT NOT NULL REFERENCES security_profiles(id) ON DELETE RESTRICT,
         default_args TEXT DEFAULT '[]',
+        shortcut_config TEXT DEFAULT '{}',
         last_run_at TEXT,
         last_exit_code INTEGER,
         status TEXT NOT NULL DEFAULT 'ready',
@@ -136,6 +137,10 @@ def init_database_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE security_profiles ADD COLUMN hidraw INTEGER NOT NULL DEFAULT 0;")
     if "mic" not in cols:
         conn.execute("ALTER TABLE security_profiles ADD COLUMN mic INTEGER NOT NULL DEFAULT 0;")
+
+    app_cols = {row[1] for row in conn.execute("PRAGMA table_info(applications)").fetchall()}
+    if "shortcut_config" not in app_cols:
+        conn.execute("ALTER TABLE applications ADD COLUMN shortcut_config TEXT DEFAULT '{}';")
 
     cursor = conn.execute("SELECT COUNT(*) FROM security_profiles")
     if cursor.fetchone()[0] == 0:

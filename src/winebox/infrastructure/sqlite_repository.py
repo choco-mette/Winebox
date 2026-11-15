@@ -19,6 +19,7 @@ from winebox.domain.models import (
     PrefixStatus,
     Runner,
     SecurityProfile,
+    ShortcutSettings,
 )
 from winebox.infrastructure.db_schema import DEFAULT_PROFILES, SCHEMA_VERSION, init_database_schema
 from winebox.infrastructure.db_sync import import_legacy_toml_if_needed, write_prefix_snapshot
@@ -163,18 +164,30 @@ class SqliteRepository:
 
     # ---------------- Application CRUD ----------------
     def save_app(self, app: Application) -> None:
+        shortcut_json = json.dumps(
+            {
+                "menu_enabled": app.shortcut.menu_enabled,
+                "desktop_enabled": app.shortcut.desktop_enabled,
+                "icon": app.shortcut.icon,
+                "categories": app.shortcut.categories,
+                "comment": app.shortcut.comment,
+                "terminal": app.shortcut.terminal,
+                "startup_wm_class": app.shortcut.startup_wm_class,
+            }
+        )
         with self.get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO applications (id, name, prefix_id, exe_path, runner_id, profile_id, default_args, last_run_at, last_exit_code, status, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO applications (id, name, prefix_id, exe_path, runner_id, profile_id, default_args, shortcut_config, last_run_at, last_exit_code, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name, prefix_id = excluded.prefix_id, exe_path = excluded.exe_path,
                     runner_id = excluded.runner_id, profile_id = excluded.profile_id,
-                    default_args = excluded.default_args, last_run_at = excluded.last_run_at,
-                    last_exit_code = excluded.last_exit_code, status = excluded.status;
+                    default_args = excluded.default_args, shortcut_config = excluded.shortcut_config,
+                    last_run_at = excluded.last_run_at, last_exit_code = excluded.last_exit_code,
+                    status = excluded.status;
                 """,
-                (app.id, app.name, app.prefix_id, app.exe_path, app.runner_id, app.profile_id, json.dumps(app.arguments), app.last_run_at.isoformat() if app.last_run_at else None, app.last_exit_code, app.status.value, app.created_at.isoformat()),
+                (app.id, app.name, app.prefix_id, app.exe_path, app.runner_id, app.profile_id, json.dumps(app.arguments), shortcut_json, app.last_run_at.isoformat() if app.last_run_at else None, app.last_exit_code, app.status.value, app.created_at.isoformat()),
             )
             conn.execute("DELETE FROM app_host_mounts WHERE app_id = ?", (app.id,))
             for m in app.policy.host_mounts:
@@ -204,10 +217,21 @@ class SqliteRepository:
             ]
             env_vars = {e["key"]: e["value"] for e in conn.execute("SELECT * FROM app_env_vars WHERE app_id = ?", (app_id,)).fetchall()}
             policy = prof.to_policy(host_mounts=mounts, env_vars=env_vars)
+            raw_sc = json.loads(row["shortcut_config"] or "{}") if "shortcut_config" in row.keys() else {}
+            shortcut = ShortcutSettings(
+                menu_enabled=bool(raw_sc.get("menu_enabled", False)),
+                desktop_enabled=bool(raw_sc.get("desktop_enabled", False)),
+                icon=str(raw_sc.get("icon", "")),
+                categories=str(raw_sc.get("categories", "Game;Utility;")),
+                comment=str(raw_sc.get("comment", "")),
+                terminal=bool(raw_sc.get("terminal", False)),
+                startup_wm_class=str(raw_sc.get("startup_wm_class", "")),
+            )
             return Application(
                 id=row["id"], name=row["name"], prefix_id=row["prefix_id"],
                 exe_path=row["exe_path"], runner_id=row["runner_id"], profile_id=row["profile_id"],
                 arguments=json.loads(row["default_args"] or "[]"), policy=policy,
+                shortcut=shortcut,
                 status=AppStatus(row["status"]),
                 last_run_at=datetime.fromisoformat(row["last_run_at"]) if row["last_run_at"] else None,
                 last_exit_code=row["last_exit_code"],
