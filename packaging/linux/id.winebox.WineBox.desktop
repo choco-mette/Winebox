@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=WineBox
+GenericName=Sandboxed Wine Orchestrator
+Comment=Manage and run Windows applications inside Bubblewrap sandboxes
+Exec=winebox gui
+Icon=id.winebox.WineBox
+Terminal=false
+Categories=Game;Utility;System;
+StartupNotify=true
+StartupWMClass=id.winebox.WineBox
