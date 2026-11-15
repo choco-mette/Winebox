@@ -106,15 +106,6 @@ All WineBox data is stored rootless under standard XDG directories:
 
 ---
 
-## Technical Documentation
-
-- [SAD.md](SAD.md) — Software Architecture Document
-- [docs/03-decisions/adr/](docs/03-decisions/adr/) — 28 Architecture Decision Records (ADRs)
-- [docs/04-security/threat-model.md](docs/04-security/threat-model.md) — Threat Model and Security Architecture
-- [docs/05-specifications/](docs/05-specifications/) — Technical Specifications (Sandbox, Prefix, Runner, Deployment, CLI)
-
----
-
 ## License
 
 MIT
