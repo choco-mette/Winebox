@@ -252,6 +252,28 @@ class TestRunnerCLI(unittest.TestCase):
             self.assertIn("removed", res_rm.output)
             self.assertTrue(ext_bin.exists())
 
+    def test_cli_interactive_install_passes_valid_source_and_version(self) -> None:
+        fake_release = [
+            {
+                "source": "wine-builds",
+                "kind": "wine",
+                "version": "9.21",
+                "filename": "wine-9.21-staging-tkg-amd64.tar.xz",
+                "url": "https://example.invalid/wine.tar.xz",
+            }
+        ]
+        with patch.object(RunnerService, "fetch_available_releases", return_value=fake_release) as mock_fetch, patch.object(
+            RunnerService, "install_runner"
+        ) as mock_install:
+            mock_install.return_value = (
+                unittest.mock.MagicMock(id="wine-builds-9-21", wine_bin=Path("/tmp/bin/wine")),
+                None,
+            )
+            res = self.cli.invoke(app, ["runner", "install"], input="1\n1\n")
+            self.assertEqual(res.exit_code, 0)
+            mock_fetch.assert_called_once_with("wine-builds", limit=15)
+            mock_install.assert_called_once_with("wine-builds", version="9.21", share=False)
+
 
 if __name__ == "__main__":
     unittest.main()

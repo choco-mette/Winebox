@@ -105,7 +105,7 @@ def runner_install(
 
         if not selected_source:
             sources = svc.list_sources()
-            source_options = [(f"{k} — {m['description']}", k) for k, m in sources.items()]
+            source_options = [(k, f"{k} — {m['description']}") for k, m in sources.items()]
             selected_source = tui_select("Select Runner Source", source_options)
             if not selected_source:
                 raise typer.Exit(code=0)
@@ -115,7 +115,7 @@ def runner_install(
                 if not releases:
                     console.print(f"[yellow]No downloadable releases found for '{selected_source}'.[/yellow]")
                     raise typer.Exit(code=1)
-                ver_options = [(f"{r['version']} ({r['filename']})", r["version"]) for r in releases]
+                ver_options = [(r["version"], f"{r['version']} ({r['filename']})") for r in releases]
                 selected_version = tui_select(f"Select {selected_source} Version", ver_options)
                 if not selected_version:
                     raise typer.Exit(code=0)
