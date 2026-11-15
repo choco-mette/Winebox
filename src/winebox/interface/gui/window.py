@@ -21,6 +21,9 @@ class WineboxMainWindow(Adw.ApplicationWindow):
         self.set_content(self.toast_overlay)
 
         self.split_view = Adw.NavigationSplitView()
+        self.split_view.set_sidebar_width_unit(Adw.LengthUnit.PX)
+        self.split_view.set_min_sidebar_width(220)
+        self.split_view.set_max_sidebar_width(220)
         self.toast_overlay.set_child(self.split_view)
 
         # Sidebar
