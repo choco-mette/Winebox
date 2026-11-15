@@ -1,0 +1,45 @@
+# Maintainer: WineBox Developers <winebox@example.invalid>
+pkgname=winebox
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Secure orchestrator for managing and running Windows applications in Linux with Bubblewrap"
+arch=('any')
+url="https://github.com/winebox/winebox"
+license=('MIT')
+depends=(
+  'python>=3.11'
+  'bubblewrap'
+  'python-typer'
+  'python-rich'
+  'python-tomli-w'
+  'python-platformdirs'
+  'python-gobject'
+  'gtk4'
+  'libadwaita'
+)
+optdepends=('wine: system Wine runner support')
+source=("${pkgname}-${pkgver}-linux-noarch.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "${srcdir}/${pkgname}-${pkgver}"
+
+  local py_site
+  py_site="$(python3 -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
+  install -d "${pkgdir}${py_site}"
+  cp -a src/winebox "${pkgdir}${py_site}/"
+  find "${pkgdir}${py_site}/winebox" -name "__pycache__" -type d -exec rm -rf {} +
+
+  install -Dm755 /dev/stdin "${pkgdir}/usr/bin/winebox" <<'EOF'
+#!/usr/bin/python3
+from winebox.interface.cli import main
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+EOF
+
+  install -Dm644 packaging/linux/id.winebox.WineBox.desktop \
+    "${pkgdir}/usr/share/applications/id.winebox.WineBox.desktop"
+  install -Dm644 packaging/linux/id.winebox.WineBox.svg \
+    "${pkgdir}/usr/share/icons/hicolor/scalable/apps/id.winebox.WineBox.svg"
+}
