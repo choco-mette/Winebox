@@ -270,3 +270,17 @@ class SqliteRepository:
 
     def sync_prefix_snapshot(self, prefix_id: str) -> None:
         write_prefix_snapshot(self, prefix_id)
+
+    def delete_runner(self, runner_id: str) -> None:
+        if runner_id == "system-wine":
+            raise WineboxError("Cannot delete built-in 'system-wine' runner")
+        with self.get_connection() as conn:
+            pfx_used = conn.execute("SELECT COUNT(*) FROM prefixes WHERE runner_id = ?", (runner_id,)).fetchone()[0]
+            app_used = conn.execute("SELECT COUNT(*) FROM applications WHERE runner_id = ?", (runner_id,)).fetchone()[0]
+            if pfx_used > 0 or app_used > 0:
+                raise WineboxError(
+                    f"Runner '{runner_id}' is currently in use by {pfx_used} prefix(es) and {app_used} app(s)."
+                )
+            cur = conn.execute("DELETE FROM runners WHERE id = ?", (runner_id,))
+            if cur.rowcount == 0:
+                raise ResourceNotFoundError(f"Runner '{runner_id}' not found")

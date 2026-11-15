@@ -7,8 +7,9 @@ from rich.console import Console
 from rich.table import Table
 from winebox.application.runner_service import RunnerService
 from winebox.common.exceptions import WineboxError
+from winebox.interface.tui import tui_select
 
-runner_app = typer.Typer(help="Manage system and custom Wine runners.")
+runner_app = typer.Typer(help="Manage system, external, and Winebox-managed Wine/Proton runners.")
 console = Console()
 
 
@@ -51,3 +52,121 @@ def runner_register(
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(code=1)
 
+
+@runner_app.command("available")
+def runner_available(
+    source: Optional[str] = typer.Argument(None, help="Runner source key (e.g. wine-builds, wine-ge, ge-proton)"),
+    limit: int = typer.Option(10, "--limit", "-l", help="Maximum number of releases to display"),
+) -> None:
+    """List supported runner sources or available releases from a source."""
+    svc = RunnerService()
+    if not source:
+        sources = svc.list_sources()
+        table = Table(title="Supported Runner Sources")
+        table.add_column("Source Key", style="bold cyan")
+        table.add_column("Kind")
+        table.add_column("Repository")
+        table.add_column("Description")
+        for key, meta in sources.items():
+            table.add_row(key, meta["kind"], meta["repo"], meta["description"])
+        console.print(table)
+        return
+
+    try:
+        releases = svc.fetch_available_releases(source, limit=limit)
+    except WineboxError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+    table = Table(title=f"Available Releases ({source})")
+    table.add_column("Version", style="bold cyan")
+    table.add_column("Kind")
+    table.add_column("Archive")
+    for rel in releases:
+        table.add_row(rel["version"], rel["kind"], rel["filename"])
+    console.print(table)
+
+
+@runner_app.command("install")
+def runner_install(
+    source: Optional[str] = typer.Argument(None, help="Runner source key (e.g. wine-builds, wine-ge, ge-proton)"),
+    version: Optional[str] = typer.Argument(None, help="Specific release version tag (defaults to latest)"),
+    share: bool = typer.Option(
+        False,
+        "--share",
+        help="Symlink installed runner to Lutris/Steam user directory for ecosystem sharing",
+    ),
+) -> None:
+    """Download, safely extract, and register a Wine/Proton runner."""
+    svc = RunnerService()
+    try:
+        selected_source = source
+        selected_version = version
+
+        if not selected_source:
+            sources = svc.list_sources()
+            source_options = [(f"{k} — {m['description']}", k) for k, m in sources.items()]
+            selected_source = tui_select("Select Runner Source", source_options)
+            if not selected_source:
+                raise typer.Exit(code=0)
+
+            if not selected_version:
+                releases = svc.fetch_available_releases(selected_source, limit=15)
+                if not releases:
+                    console.print(f"[yellow]No downloadable releases found for '{selected_source}'.[/yellow]")
+                    raise typer.Exit(code=1)
+                ver_options = [(f"{r['version']} ({r['filename']})", r["version"]) for r in releases]
+                selected_version = tui_select(f"Select {selected_source} Version", ver_options)
+                if not selected_version:
+                    raise typer.Exit(code=0)
+
+        console.print(f"Installing runner from [cyan]{selected_source}[/cyan] ({selected_version or 'latest'})...")
+        runner, shared_link = svc.install_runner(selected_source, version=selected_version, share=share)
+        console.print(f"[bold green]✓[/bold green] Installed runner '[bold]{runner.id}[/bold]' ({runner.wine_bin})")
+        if shared_link:
+            console.print(f"[bold green]✓[/bold green] Shared symlink created at {shared_link}")
+    except WineboxError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+
+@runner_app.command("scan")
+def runner_scan() -> None:
+    """Scan Lutris and Steam user directories and register discovered runners."""
+    svc = RunnerService()
+    added = svc.scan_external_runners()
+    if not added:
+        console.print("[yellow]No new external runners found.[/yellow]")
+        return
+
+    for runner in added:
+        console.print(f"[bold green]✓[/bold green] Registered external runner '[bold]{runner.id}[/bold]' ({runner.wine_bin})")
+
+
+@runner_app.command("share")
+def runner_share(
+    runner_id: str = typer.Argument(..., help="Registered runner ID to share"),
+) -> None:
+    """Symlink a Winebox runner into Lutris or Steam user directory."""
+    svc = RunnerService()
+    try:
+        link_path = svc.share_runner(runner_id)
+        console.print(f"[bold green]✓[/bold green] Shared '{runner_id}' at {link_path}")
+    except WineboxError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+
+@runner_app.command("remove")
+def runner_remove(
+    runner_id: str = typer.Argument(..., help="Runner ID to remove"),
+    keep_files: bool = typer.Option(False, "--keep-files", help="Unregister runner without deleting files"),
+) -> None:
+    """Unregister a runner, clean shared symlinks, and optionally delete managed files."""
+    svc = RunnerService()
+    try:
+        svc.remove_runner(runner_id, delete_files=not keep_files)
+        console.print(f"[bold green]✓[/bold green] Runner '{runner_id}' removed.")
+    except WineboxError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise typer.Exit(code=1)

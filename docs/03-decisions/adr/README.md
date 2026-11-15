@@ -29,4 +29,5 @@ Index keputusan arsitektural proyek WineBox.
 | [ADR-023](ADR-023-sandboxed-winetricks-shared-cache.md) | Eksekusi Winetricks Terisolasi di Bubblewrap dengan Shared Cache dan Dual-Mode Selector | Accepted | 2026-11-15 |
 | [ADR-024](ADR-024-xdg-desktop-integration.md) | Integrasi XDG Desktop Entry (.desktop) dengan Opsi Interaktif dan Manajemen Siklus Hidup | Accepted | 2026-11-15 |
 | [ADR-025](ADR-025-emergency-prefix-process-killer.md) | Terminasi Darurat Proses Prefix dan Sanitasi Lingkungan (Kill Switch) | Accepted | 2026-11-15 |
+| [ADR-026](ADR-026-runner-manager-and-shared-ecosystem.md) | Runner Manager Terintegrasi dengan Rootless Shared Ecosystem Symlinks | Accepted | 2026-11-15 |
 
