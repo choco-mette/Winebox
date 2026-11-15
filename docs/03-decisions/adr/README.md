@@ -26,4 +26,5 @@ Index keputusan arsitektural proyek WineBox.
 | [ADR-020](ADR-020-sqlite-configuration-and-rotating-logs.md) | Manajemen Konfigurasi SQLite Terpusat dan Log File Terotasi | Accepted | 2026-11-13 |
 | [ADR-021](ADR-021-unified-interactive-add-wizard.md) | Wizard Penambahan Aplikasi Terpadu (winebox add) dengan Deteksi Interaktif Executable dan Profil Keamanan | Accepted | 2026-11-13 |
 | [ADR-022](ADR-022-lutris-library-integration.md) | Integrasi Ekspor dan Sinkronisasi Aplikasi WineBox ke Lutris Library | Accepted | 2026-11-13 |
+| [ADR-023](ADR-023-sandboxed-winetricks-shared-cache.md) | Eksekusi Winetricks Terisolasi di Bubblewrap dengan Shared Cache dan Dual-Mode Selector | Accepted | 2026-11-15 |
 
