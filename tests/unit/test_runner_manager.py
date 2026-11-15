@@ -154,6 +154,7 @@ class TestRunnerService(unittest.TestCase):
         assert shared_link is not None
         self.assertTrue(shared_link.is_symlink())
         self.assertEqual(shared_link.parent, self.xdg_data / "Steam" / "compatibilitytools.d")
+        self.assertTrue((shared_link / "files" / "bin" / "wine").exists())
 
     def test_scan_external_runners(self) -> None:
         lutris_wine = self.xdg_data / "lutris" / "runners" / "wine" / "wine-ge-8-26" / "bin"

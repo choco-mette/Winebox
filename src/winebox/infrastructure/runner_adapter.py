@@ -222,21 +222,41 @@ class RunnerAdapter:
         raise WineboxError(f"Could not find 'bin/wine', 'files/bin/wine', or 'dist/bin/wine' inside '{runner_root}'")
 
     @classmethod
+    def _resolve_runner_root(cls, runner_dir: Path) -> Path:
+        """Unwraps a single outer archive directory if bin/wine or files/bin/wine is nested one level down."""
+        resolved = runner_dir.resolve()
+        for prefix in (resolved, resolved / "files", resolved / "dist"):
+            if (prefix / "bin" / "wine").exists():
+                return resolved
+        if resolved.is_dir():
+            subdirs = [d for d in resolved.iterdir() if d.is_dir()]
+            if len(subdirs) == 1:
+                for prefix in (subdirs[0], subdirs[0] / "files", subdirs[0] / "dist"):
+                    if (prefix / "bin" / "wine").exists():
+                        return subdirs[0]
+        return resolved
+
+    @classmethod
     def create_shared_symlink(
         cls,
         runner_dir: Path,
         kind: str,
         xdg_data_home: Optional[Path] = None,
+        link_name: Optional[str] = None,
     ) -> Path:
-        """Creates a rootless symlink in Lutris or Steam compatibilitytools.d."""
+        """Creates a rootless symlink in Lutris or Steam compatibilitytools.d pointing to the runner root."""
         target_parent = cls.get_shared_target_dir(kind, xdg_data_home=xdg_data_home)
         target_parent.mkdir(parents=True, exist_ok=True)
-        link_path = target_parent / runner_dir.name
+        resolved_target = cls._resolve_runner_root(runner_dir)
+        link_path = target_parent / (link_name or runner_dir.name)
         if link_path.is_symlink() or link_path.exists():
-            if link_path.is_symlink() and link_path.resolve() == runner_dir.resolve():
+            if link_path.is_symlink() and link_path.resolve() == resolved_target:
                 return link_path
-            raise WineboxError(f"Shared runner path already exists: {link_path}")
-        link_path.symlink_to(runner_dir.resolve())
+            if link_path.is_symlink() and link_path.resolve().is_relative_to(runner_dir.resolve()):
+                link_path.unlink()
+            else:
+                raise WineboxError(f"Shared runner path already exists: {link_path}")
+        link_path.symlink_to(resolved_target)
         return link_path
 
     @classmethod

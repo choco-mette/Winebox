@@ -134,7 +134,9 @@ class RunnerService:
             kind = "wine"
             runner_dir = parent_dir
 
-        return RunnerAdapter.create_shared_symlink(runner_dir, kind, xdg_data_home=xdg_data_home)
+        return RunnerAdapter.create_shared_symlink(
+            runner_dir, kind, xdg_data_home=xdg_data_home, link_name=runner_id
+        )
 
     def scan_external_runners(self, xdg_data_home: Optional[Path] = None) -> List[Runner]:
         existing_ids = {r.id for r in self.list_runners()}
