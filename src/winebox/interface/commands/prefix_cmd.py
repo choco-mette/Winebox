@@ -156,46 +156,53 @@ WINETRICKS_CATALOG = [
 ]
 
 
+def _select_winetricks_prefix(prefix_svc: PrefixService, prefix_id: Optional[str]) -> str:
+    """Resolves prefix_id or prompts interactively when omitted."""
+    prefixes = prefix_svc.list_prefixes()
+    if not prefixes:
+        console.print("[yellow]No prefixes found. Create one first with 'winebox prefix create <id>'.[/yellow]")
+        raise typer.Exit(code=1)
+    if prefix_id:
+        return prefix_id
+    pref_options = [(p.id, f"{p.id} ({p.name})") for p in prefixes]
+    return tui_select("Select Wine Prefix for Winetricks", pref_options, default_index=0)
+
+
+def _select_winetricks_verbs(verbs: Optional[List[str]]) -> Optional[List[str]]:
+    """Returns CLI verbs or opens interactive catalog selector; returns None if cancelled."""
+    selected = list(verbs or [])
+    if selected:
+        return selected
+
+    catalog_options = list(WINETRICKS_CATALOG) + [("__custom__", "⌨ Enter custom verbs manually")]
+    chosen = tui_multiselect("Select Winetricks Packages to Install", catalog_options)
+    if not chosen:
+        console.print("[dim]No winetricks packages selected. Operation cancelled.[/dim]")
+        return None
+
+    if "__custom__" in chosen:
+        chosen.remove("__custom__")
+        custom_input = typer.prompt("Enter package verbs separated by space (e.g. vcrun2015 mfc42)")
+        chosen.extend(custom_input.split())
+    return chosen
+
+
 @prefix_app.command("winetricks")
 def prefix_winetricks(
     prefix_id: Optional[str] = typer.Argument(None, help="Prefix ID to run winetricks on (interactive if omitted)"),
     verbs: List[str] = typer.Argument(None, help="Winetricks package verbs to install (e.g. vcrun2022 dxvk)"),
 ) -> None:
     """Run Winetricks inside the Bubblewrap sandbox with shared cache across prefixes (ADR-023)."""
-    prefix_svc = PrefixService()
-    prefixes = prefix_svc.list_prefixes()
-    if not prefixes:
-        console.print("[yellow]No prefixes found. Create one first with 'winebox prefix create <id>'.[/yellow]")
-        raise typer.Exit(code=1)
-
-    target_prefix = prefix_id
-    if not target_prefix:
-        pref_options = [(p.id, f"{p.id} ({p.name})") for p in prefixes]
-        target_prefix = tui_select("Select Wine Prefix for Winetricks", pref_options, default_index=0)
-
-    selected_verbs = list(verbs or [])
+    target_prefix = _select_winetricks_prefix(PrefixService(), prefix_id)
+    selected_verbs = _select_winetricks_verbs(verbs)
     if not selected_verbs:
-        catalog_options = list(WINETRICKS_CATALOG)
-        catalog_options.append(("__custom__", "⌨ Enter custom verbs manually"))
-
-        chosen = tui_multiselect("Select Winetricks Packages to Install", catalog_options)
-        if not chosen:
-            console.print("[dim]No winetricks packages selected. Operation cancelled.[/dim]")
-            return
-
-        if "__custom__" in chosen:
-            chosen.remove("__custom__")
-            custom_input = typer.prompt("Enter package verbs separated by space (e.g. vcrun2015 mfc42)")
-            chosen.extend(custom_input.split())
-
-        selected_verbs = chosen
+        return
 
     console.print(f"\n[bold cyan]Running Winetricks on prefix '{target_prefix}'...[/bold cyan]")
-    console.print(f"[dim]Verbs:[/dim] [green]{', '.join(selected_verbs) if selected_verbs else 'GUI'}[/green]\n")
+    console.print(f"[dim]Verbs:[/dim] [green]{', '.join(selected_verbs)}[/green]\n")
 
-    wt_svc = WinetricksService()
     try:
-        wt_svc.run_winetricks(
+        WinetricksService().run_winetricks(
             prefix_id=target_prefix,
             verbs=selected_verbs,
             unattended="gui" not in selected_verbs,

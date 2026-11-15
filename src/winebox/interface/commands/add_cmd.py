@@ -1,7 +1,7 @@
 """Unified interactive TUI 'winebox add' wizard command (ADR-021 & ADR-022)."""
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 import typer
 from rich.console import Console
 from rich.panel import Panel
@@ -29,159 +29,29 @@ def add_wizard(
     """Interactive TUI Wizard to add a pre-installed game/app or run a Windows installer."""
     console.print("\n[bold cyan]✨ WineBox Interactive Setup Wizard[/bold cyan]\n")
 
-    # Step 1: Determine Mode & Source Path
-    if source_path is not None:
-        resolved_source = source_path.expanduser().resolve()
-        if not resolved_source.exists():
-            console.print(f"[bold red]Error:[/bold red] Path not found: {resolved_source}")
-            raise typer.Exit(code=1)
-        mode = "portable" if resolved_source.is_dir() else "installer"
-        console.print(f"[bold green]✔[/bold green] [bold]Source:[/bold] [cyan]{resolved_source}[/cyan] ({mode})")
-    else:
-        mode = tui_select(
-            "Select Application / Game Type",
-            [
-                ("portable", "Pre-installed Game / Application Folder (Portable)"),
-                ("installer", "Windows Installer File (.exe / .msi)"),
-            ],
-            default_index=0,
-        )
-        resolved_source = (
-            tui_browse_directory("Select Game / Application Directory")
-            if mode == "portable"
-            else tui_browse_file("Select Windows Installer (.exe / .msi)")
-        )
-        if not resolved_source.exists():
-            console.print(f"[bold red]Error:[/bold red] Path not found: {resolved_source}")
-            raise typer.Exit(code=1)
+    mode, resolved_source = _resolve_source(source_path)
 
-    # Step 2: Application Name & Auto-Slug ID
     default_name = resolved_source.name if resolved_source.is_dir() else resolved_source.stem
     app_name = typer.prompt("\n◆ Game / Application Name", default=default_name)
     app_id = slugify(app_name)
     console.print(f"  [dim]Auto-generated ID:[/dim] [bold cyan]{app_id}[/bold cyan]\n")
 
-    # Step 3: Security Profile Selection (Default: permissive)
     profile_svc = ProfileService()
-    profiles = profile_svc.list_profiles()
-    chosen_profile = profile_id
-    if not chosen_profile:
-        sorted_profiles = sorted(profiles, key=lambda p: (0 if p.id == "permissive" else 1, p.id))
-        prof_options = [
-            (p.id, f"{p.id}{' [Default - Recommended for Games]' if p.id == 'permissive' else ''} — {p.description}")
-            for p in sorted_profiles
-        ]
-        default_prof_idx = next((i for i, p in enumerate(sorted_profiles) if p.id == "permissive"), 0)
-        chosen_profile = tui_select("Select Security Profile", prof_options, default_index=default_prof_idx)
+    chosen_profile = _select_profile(profile_svc, profile_id)
+    target_prefix = _select_or_create_prefix(PrefixService(), prefix_id, app_name, chosen_profile)
 
-    # Step 4: Prefix Selection or Creation
-    prefix_svc = PrefixService()
-    prefixes = prefix_svc.list_prefixes()
-    target_prefix = prefix_id
-    if not target_prefix:
-        prefix_options = [(p.id, f"{p.id} ({p.name}) [Profile: {p.default_profile_id}]") for p in prefixes]
-        prefix_options.append(("__new__", "+ [Create New Prefix]"))
-        chosen_prefix = tui_select("Select Wine Prefix", prefix_options, default_index=0)
-        if chosen_prefix == "__new__":
-            new_prefix_name = typer.prompt("\n◆ New Prefix Name", default=app_name)
-            new_prefix_id = slugify(new_prefix_name)
-            console.print(f"  [dim]Auto-generated Prefix ID:[/dim] [bold cyan]{new_prefix_id}[/bold cyan]\n")
-            with console.status(f"[bold green]Creating prefix '{new_prefix_id}' (profile: {chosen_profile})..."):
-                try:
-                    prefix_svc.create_prefix(
-                        prefix_id=new_prefix_id,
-                        name=new_prefix_name,
-                        default_profile_id=chosen_profile,
-                    )
-                except WineboxError as e:
-                    console.print(f"[bold red]Prefix creation error:[/bold red] {e}")
-                    raise typer.Exit(code=1)
-            target_prefix = new_prefix_id
-        else:
-            target_prefix = chosen_prefix
-
-    # Step 5: Executable Selection & Execution
     try:
-        if mode == "portable":
-            import_svc = ImportService()
-            chosen_exe = tui_browse_file(
-                title="Select Main Executable File (.exe)",
-                start_dir=resolved_source,
-                root_boundary=resolved_source,
-                relative_to=resolved_source,
-                extensions=(".exe",),
-            )
-
-            with console.status(f"[bold green]Importing and auditing '{app_name}' into prefix '{target_prefix}'..."):
-                import_svc.import_portable_app(
-                    source_dir=resolved_source,
-                    prefix_id=target_prefix,
-                    app_id=app_id,
-                    name=app_name,
-                    exe_rel_path=chosen_exe,
-                    profile_id=chosen_profile,
-                )
-        else:
-            prof_obj = profile_svc.get_profile(chosen_profile)
-            install_svc = InstallService()
-            console.print("\n[bold green]Launching installer inside Bubblewrap sandbox...[/bold green]")
-            candidates = install_svc.run_installer(
-                installer_path=resolved_source,
-                prefix_id=target_prefix,
-                policy=prof_obj.to_policy(),
-            )
-            console.print("\n[bold green]✓ Installer execution finished.[/bold green]")
-
-            exe_options = [(exe, f"⚙ {exe}") for exe in candidates] + [
-                ("__manual__", "⌨ [Enter .exe path manually]"),
-                ("__skip__", "⏭ [Skip application registration]"),
-            ]
-            chosen_exe = tui_select("Select Installed Executable (.exe)", exe_options, default_index=0)
-            if chosen_exe == "__manual__":
-                chosen_exe = typer.prompt("Enter relative .exe path inside prefix (e.g. drive_c/Program Files/...)")
-
-            if chosen_exe != "__skip__":
-                AppService().register_app(
-                    app_id=app_id,
-                    name=app_name,
-                    prefix_id=target_prefix,
-                    exe_path=chosen_exe,
-                    profile_id=chosen_profile,
-                )
-
-        # Step 6: Optional Lutris Integration (ADR-022)
-        if (mode == "portable" or chosen_exe != "__skip__") and LutrisService.is_available():
-            lutris_choice = tui_select(
-                "Add Game to Lutris Library?",
-                [
-                    ("yes", "Yes — Launch Lutris installer dialog (lutris --install)"),
-                    ("no", "No — Keep in WineBox only"),
-                ],
-                default_index=0,
-            )
-            if lutris_choice == "yes":
-                yaml_file = LutrisService().export_app_to_lutris(app_id, launch_lutris=True)
-                console.print(
-                    f"[bold green]✓[/bold green] Lutris script generated ([dim]{yaml_file}[/dim]). "
-                    "Please click [bold cyan]Install[/bold cyan] on the Lutris prompt window."
-                )
-
-        # Step 7: Optional Desktop Shortcut Creation (ADR-024)
-        desktop_path = None
+        chosen_exe = _install_or_import(
+            mode=mode,
+            resolved_source=resolved_source,
+            target_prefix=target_prefix,
+            app_id=app_id,
+            app_name=app_name,
+            chosen_profile=chosen_profile,
+            profile_svc=profile_svc,
+        )
         if mode == "portable" or chosen_exe != "__skip__":
-            desktop_choice = tui_select(
-                "Create Desktop Shortcut (.desktop)?",
-                [
-                    ("yes", "Yes — Add to Linux Application Menu"),
-                    ("no", "No — Keep in WineBox only"),
-                ],
-                default_index=0,
-            )
-            if desktop_choice == "yes":
-                desktop_path = DesktopService().create_desktop_entry(app_id)
-                console.print(f"[bold green]✓[/bold green] Desktop shortcut created ([dim]{desktop_path}[/dim]).")
-
-        if mode == "portable" or chosen_exe != "__skip__":
+            desktop_path = _prompt_optional_integrations(app_id)
             _print_summary_panel(
                 app_name,
                 app_id,
@@ -194,6 +64,172 @@ def add_wizard(
     except WineboxError as e:
         console.print(f"[bold red]Setup Error:[/bold red] {e}")
         raise typer.Exit(code=1)
+
+
+def _resolve_source(source_path: Optional[Path]) -> Tuple[str, Path]:
+    """Resolves application mode ('portable' or 'installer') and validates source path."""
+    if source_path is not None:
+        resolved = source_path.expanduser().resolve()
+        if not resolved.exists():
+            console.print(f"[bold red]Error:[/bold red] Path not found: {resolved}")
+            raise typer.Exit(code=1)
+        mode = "portable" if resolved.is_dir() else "installer"
+        console.print(f"[bold green]✔[/bold green] [bold]Source:[/bold] [cyan]{resolved}[/cyan] ({mode})")
+        return mode, resolved
+
+    mode = tui_select(
+        "Select Application / Game Type",
+        [
+            ("portable", "Pre-installed Game / Application Folder (Portable)"),
+            ("installer", "Windows Installer File (.exe / .msi)"),
+        ],
+        default_index=0,
+    )
+    resolved = (
+        tui_browse_directory("Select Game / Application Directory")
+        if mode == "portable"
+        else tui_browse_file("Select Windows Installer (.exe / .msi)")
+    )
+    if not resolved.exists():
+        console.print(f"[bold red]Error:[/bold red] Path not found: {resolved}")
+        raise typer.Exit(code=1)
+    return mode, resolved
+
+
+def _select_profile(profile_svc: ProfileService, profile_id: Optional[str]) -> str:
+    """Returns requested profile ID or prompts interactively with permissive as default."""
+    if profile_id:
+        return profile_id
+    profiles = profile_svc.list_profiles()
+    sorted_profiles = sorted(profiles, key=lambda p: (0 if p.id == "permissive" else 1, p.id))
+    prof_options = [
+        (p.id, f"{p.id}{' [Default - Recommended for Games]' if p.id == 'permissive' else ''} — {p.description}")
+        for p in sorted_profiles
+    ]
+    default_idx = next((i for i, p in enumerate(sorted_profiles) if p.id == "permissive"), 0)
+    return tui_select("Select Security Profile", prof_options, default_index=default_idx)
+
+
+def _select_or_create_prefix(
+    prefix_svc: PrefixService,
+    prefix_id: Optional[str],
+    app_name: str,
+    chosen_profile: str,
+) -> str:
+    """Selects an existing prefix or creates a new one interactively."""
+    if prefix_id:
+        return prefix_id
+    prefixes = prefix_svc.list_prefixes()
+    prefix_options = [(p.id, f"{p.id} ({p.name}) [Profile: {p.default_profile_id}]") for p in prefixes]
+    prefix_options.append(("__new__", "+ [Create New Prefix]"))
+    chosen_prefix = tui_select("Select Wine Prefix", prefix_options, default_index=0)
+    if chosen_prefix != "__new__":
+        return chosen_prefix
+
+    new_prefix_name = typer.prompt("\n◆ New Prefix Name", default=app_name)
+    new_prefix_id = slugify(new_prefix_name)
+    console.print(f"  [dim]Auto-generated Prefix ID:[/dim] [bold cyan]{new_prefix_id}[/bold cyan]\n")
+    with console.status(f"[bold green]Creating prefix '{new_prefix_id}' (profile: {chosen_profile})..."):
+        try:
+            prefix_svc.create_prefix(
+                prefix_id=new_prefix_id,
+                name=new_prefix_name,
+                default_profile_id=chosen_profile,
+            )
+        except WineboxError as e:
+            console.print(f"[bold red]Prefix creation error:[/bold red] {e}")
+            raise typer.Exit(code=1)
+    return new_prefix_id
+
+
+def _install_or_import(
+    mode: str,
+    resolved_source: Path,
+    target_prefix: str,
+    app_id: str,
+    app_name: str,
+    chosen_profile: str,
+    profile_svc: ProfileService,
+) -> str:
+    """Imports a portable directory or runs an installer and registers the chosen .exe."""
+    if mode == "portable":
+        chosen_exe = tui_browse_file(
+            title="Select Main Executable File (.exe)",
+            start_dir=resolved_source,
+            root_boundary=resolved_source,
+            relative_to=resolved_source,
+            extensions=(".exe",),
+        )
+        with console.status(f"[bold green]Importing and auditing '{app_name}' into prefix '{target_prefix}'..."):
+            ImportService().import_portable_app(
+                source_dir=resolved_source,
+                prefix_id=target_prefix,
+                app_id=app_id,
+                name=app_name,
+                exe_rel_path=chosen_exe,
+                profile_id=chosen_profile,
+            )
+        return chosen_exe
+
+    prof_obj = profile_svc.get_profile(chosen_profile)
+    console.print("\n[bold green]Launching installer inside Bubblewrap sandbox...[/bold green]")
+    candidates = InstallService().run_installer(
+        installer_path=resolved_source,
+        prefix_id=target_prefix,
+        policy=prof_obj.to_policy(),
+    )
+    console.print("\n[bold green]✓ Installer execution finished.[/bold green]")
+
+    exe_options = [(exe, f"⚙ {exe}") for exe in candidates] + [
+        ("__manual__", "⌨ [Enter .exe path manually]"),
+        ("__skip__", "⏭ [Skip application registration]"),
+    ]
+    chosen_exe = tui_select("Select Installed Executable (.exe)", exe_options, default_index=0)
+    if chosen_exe == "__manual__":
+        chosen_exe = typer.prompt("Enter relative .exe path inside prefix (e.g. drive_c/Program Files/...)")
+
+    if chosen_exe != "__skip__":
+        AppService().register_app(
+            app_id=app_id,
+            name=app_name,
+            prefix_id=target_prefix,
+            exe_path=chosen_exe,
+            profile_id=chosen_profile,
+        )
+    return chosen_exe
+
+
+def _prompt_optional_integrations(app_id: str) -> Optional[Path]:
+    """Prompts for optional Lutris export and XDG .desktop shortcut creation."""
+    if LutrisService.is_available():
+        lutris_choice = tui_select(
+            "Add Game to Lutris Library?",
+            [
+                ("yes", "Yes — Launch Lutris installer dialog (lutris --install)"),
+                ("no", "No — Keep in WineBox only"),
+            ],
+            default_index=0,
+        )
+        if lutris_choice == "yes":
+            yaml_file = LutrisService().export_app_to_lutris(app_id, launch_lutris=True)
+            console.print(
+                f"[bold green]✓[/bold green] Lutris script generated ([dim]{yaml_file}[/dim]). "
+                "Please click [bold cyan]Install[/bold cyan] on the Lutris prompt window."
+            )
+
+    desktop_choice = tui_select(
+        "Create Desktop Shortcut (.desktop)?",
+        [
+            ("yes", "Yes — Add to Linux Application Menu"),
+            ("no", "No — Keep in WineBox only"),
+        ],
+        default_index=0,
+    )
+    if desktop_choice == "yes":
+        desktop_path = DesktopService().create_desktop_entry(app_id)
+        console.print(f"[bold green]✓[/bold green] Desktop shortcut created ([dim]{desktop_path}[/dim]).")
+        return desktop_path
+    return None
 
 
 def _print_summary_panel(
