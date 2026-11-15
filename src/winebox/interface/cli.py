@@ -6,6 +6,7 @@ from rich.console import Console
 
 from winebox.interface.commands.add_cmd import add_wizard
 from winebox.interface.commands.app_cmd import app_app
+from winebox.interface.commands.gui_cmd import launch_gui_command
 from winebox.interface.commands.import_cmd import import_app
 from winebox.interface.commands.lutris_cmd import lutris_app
 from winebox.interface.commands.prefix_cmd import prefix_app
@@ -28,6 +29,7 @@ app.add_typer(profile_app, name="profile")
 app.add_typer(lutris_app, name="lutris")
 
 app.command("add")(add_wizard)
+app.command("gui")(launch_gui_command)
 
 console = Console()
 
