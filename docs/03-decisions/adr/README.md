@@ -31,4 +31,5 @@ Index keputusan arsitektural proyek WineBox.
 | [ADR-025](ADR-025-emergency-prefix-process-killer.md) | Terminasi Darurat Proses Prefix dan Sanitasi Lingkungan (Kill Switch) | Accepted | 2026-11-15 |
 | [ADR-026](ADR-026-runner-manager-and-shared-ecosystem.md) | Runner Manager Terintegrasi dengan Rootless Shared Ecosystem Symlinks | Accepted | 2026-11-15 |
 | [ADR-027](ADR-027-prefix-snapshot-backup-restore.md) | Prefix Snapshot & Backup Portabel dengan Validasi Keamanan dan Atomic Staging | Accepted | 2026-11-15 |
+| [ADR-028](ADR-028-gtk4-libadwaita-gui-launcher.md) | GUI Launcher Menggunakan GTK4 & Libadwaita (PyGObject) | Accepted | 2026-11-15 |
 

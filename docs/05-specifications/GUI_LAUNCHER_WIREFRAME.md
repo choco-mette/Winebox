@@ -4,15 +4,19 @@ Dokumen ini merangkum rancangan antarmuka grafis (*GUI Launcher*), perbandingan 
 
 ---
 
-## 1. Perbandingan Tech Stack GUI Client
+## 1. Keputusan Tech Stack GUI Client (ADR-028)
+
+> [!IMPORTANT]
+> **Stack Terpilih:** **GTK4 + Libadwaita (`PyGObject`)** — lihat [ADR-028](../03-decisions/adr/ADR-028-gtk4-libadwaita-gui-launcher.md).
+> Operasi berat (unduh runner, ekstraksi, backup, eksekusi sandbox) berjalan di `threading.Thread` dan memperbarui UI via `GLib.idle_add()`.
 
 Seluruh logika bisnis WineBox (`AppService`, `PrefixService`, `RunnerService`, `ProfileService`, `ExecutionService`, `WinetricksService`, `DesktopService`) sudah terisolasi di layer Python `application/` dan SQLite (`winebox.db`), sehingga GUI tinggal menjadi layer `interface/` tambahan di samping CLI.
 
-| Stack | Kelebihan | Kekurangan | Cocok Untuk |
+| Stack | Status | Kelebihan | Kekurangan |
 |---|---|---|---|
-| **PySide6 (Qt6)** | Pure `pip install PySide6` di `.venv`; `QThread` sangat matang untuk download progress & streaming log; langsung import `winebox.application.*`. | Ukuran dependency ~150 MB; tampilan Qt (bukan native GNOME Adwaita). | Development cepat, cross-DE (KDE, GNOME, XFCE, Hyprland). |
-| **GTK4 + Libadwaita (`PyGObject`)** | Native GNOME/Wayland (gaya Bottles/Lutris), ringan (~30–50 MB RAM), langsung import `winebox.application.*`. | Butuh system package (`python3-gi`, `gir1.2-gtk-4.0`, `gir1.2-adw-1`). | Distribusi paket Linux native (`.deb`, Flatpak, AUR). |
-| **Tauri / Web UI + CLI Bridge** | Desain custom penuh ala Steam/Heroic (React/Svelte/Tailwind). | Perlu IPC/JSON bridge ke CLI atau local daemon. | Fokus visual kustom tingkat tinggi. |
+| **GTK4 + Libadwaita (`PyGObject`)** | **Dipilih (ADR-028)** | Native GNOME/Wayland (gaya Bottles/Lutris), ringan (~30–50 MB RAM), langsung import `winebox.application.*`, `Gtk.ColumnView` & `Gtk.DropTarget` native. | Butuh `python3-gi`, `gir1.2-gtk-4.0`, `gir1.2-adw-1` (`--system-site-packages` di `.venv`). |
+| **PySide6 (Qt6)** | Alternatif | Pure `pip install PySide6` di `.venv`; `QThread` matang. | Ukuran dependency ~150 MB; tampilan Qt (bukan Adwaita). |
+| **Tauri / Web UI + CLI Bridge** | Alternatif | Desain custom penuh ala Steam/Heroic. | Perlu IPC/JSON bridge ke CLI atau local daemon. |
 
 ---
 
@@ -72,10 +76,10 @@ flowchart LR
 ```
 - **Quick Wine Tools:** Menjalankan `winecfg`, `regedit`, `cmd`, `taskmgr` terisolasi di Bubblewrap (`PrefixRuntimeService.run_tool`).
 - **Backup & Restore:** Ekspor snapshot `.tar.zst` (`PrefixBackupService.backup_prefix`) atau restore dari daftar backup yang tersedia.
-- **Prefix File Manager (Aman):**
-  - Menelusuri `prefix/drive_c`, `home/` (savegame & AppData), dan `logs/`.
+- **Prefix File Manager (Aman — GTK4 `Gtk.ColumnView` + `Gio.ListStore`):**
+  - Menelusuri `prefix/drive_c`, `home/` (savegame & AppData), dan `logs/` menggunakan virtualized list + ikon `Gio.content_type_guess`.
   - **Symlink Guard:** Tidak menelusuri symlink keluar dari direktori prefix (misal entri di `dosdevices/` hanya ditampilkan sebagai badge `[Symlink]`).
-  - **Quick Actions:** Klik kanan / tombol pada `.exe` untuk langsung **Run in Sandbox** atau **Register as App**, tombol **Import Mod/File**, dan tombol **Open in Host FM** (`xdg-open`) untuk operasi drag-and-drop desktop.
+  - **Drag & Drop & Aksi Native:** `Gtk.DropTarget` (`Gdk.FileList`) untuk impor mod/savegame dari file manager desktop, `Gtk.PopoverMenu` pada `.exe` (**Run in Sandbox** / **Register as App**), `Adw.AlertDialog` konfirmasi hapus, dan `Gtk.FileLauncher` untuk **Open in Host FM** (kompatibel Wayland & Flatpak).
 
 ---
 
