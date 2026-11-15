@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 from winebox.common.exceptions import WineboxError
+from winebox.infrastructure.fs_adapter import FilesystemAdapter
 
 
 class BackupAdapter:
@@ -27,25 +28,7 @@ class BackupAdapter:
 
     @staticmethod
     def _validate_tarinfo(member: tarfile.TarInfo, resolved_dest: Path) -> None:
-        raw_name = member.name
-        if not raw_name:
-            return
-        member_path = Path(raw_name)
-        if member_path.is_absolute() or raw_name.startswith("/") or ".." in member_path.parts:
-            raise WineboxError(f"Unsafe archive member path: '{raw_name}'")
-
-        target = (resolved_dest / member_path).resolve()
-        if target != resolved_dest and not target.is_relative_to(resolved_dest):
-            raise WineboxError(f"Archive path escapes destination: '{raw_name}'")
-
-        if member.issym() or member.islnk():
-            link_target = Path(member.linkname)
-            if link_target.is_absolute() or member.linkname.startswith("/"):
-                raise WineboxError(f"Unsafe absolute symlink inside archive: '{raw_name}' -> '{member.linkname}'")
-            base_dir = resolved_dest if member.islnk() else target.parent
-            link_resolved = (base_dir / link_target).resolve()
-            if link_resolved != resolved_dest and not link_resolved.is_relative_to(resolved_dest):
-                raise WineboxError(f"Escaping symlink inside archive: '{raw_name}' -> '{member.linkname}'")
+        FilesystemAdapter.validate_tar_member(member, resolved_dest)
 
     @staticmethod
     def _exclude_lock_filter(tarinfo: tarfile.TarInfo) -> Optional[tarfile.TarInfo]:
@@ -166,7 +149,7 @@ class BackupAdapter:
         manifest = cls.validate_and_read_manifest(archive_path, resolved_dest)
         try:
             with cls._open_tar_stream(archive_path) as tf:
-                tf.extractall(path=resolved_dest)
+                FilesystemAdapter.extract_tar_members(tf, resolved_dest)
         except tarfile.TarError as e:
             raise WineboxError(f"Failed to extract backup archive '{archive_path.name}': {e}") from e
         return manifest

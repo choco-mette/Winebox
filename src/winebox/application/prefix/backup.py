@@ -1,5 +1,6 @@
 """Prefix snapshot backup and restore service (ADR-027)."""
 
+import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -65,7 +66,14 @@ class PrefixBackupService:
 
             raw_id = target_prefix_id or (manifest or {}).get("prefix_id") or archive_path.name.split("_")[0].split(".")[0]
             final_id = raw_id.strip().lower().replace(" ", "-")
-            dest_dir = self.repo.get_prefix_dir(final_id)
+            if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", final_id):
+                raise WineboxError(
+                    f"Invalid target prefix ID '{raw_id}': use lowercase letters, digits, '-' or '_' only."
+                )
+            prefixes_root = self.repo.prefixes_dir.resolve()
+            dest_dir = self.repo.get_prefix_dir(final_id).resolve()
+            if dest_dir == prefixes_root or not dest_dir.is_relative_to(prefixes_root):
+                raise WineboxError(f"Invalid target prefix path for ID '{final_id}'.")
 
             if dest_dir.exists():
                 if not force:

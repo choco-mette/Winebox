@@ -115,6 +115,12 @@ class TestPrefixBackupRestore(unittest.TestCase):
         self.assertEqual((self.pfx_dir / "home" / "Saves" / "save1.ess").read_text(), "save-data")
         self.assertTrue(c_link.is_symlink())
 
+    def test_restore_rejects_invalid_target_prefix_id(self) -> None:
+        archive = self.svc.backup_prefix("skyrim")
+        for bad_id in ("../evil", "   ", "bad/id"):
+            with self.assertRaises(WineboxError):
+                self.svc.restore_prefix(archive, target_prefix_id=bad_id)
+
 
 class TestPrefixBackupCLI(unittest.TestCase):
     def setUp(self) -> None:

@@ -10,6 +10,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from winebox.common.exceptions import WineboxError
+from winebox.infrastructure.fs_adapter import FilesystemAdapter
 
 
 RUNNER_SOURCES: Dict[str, Dict[str, str]] = {
@@ -120,6 +121,9 @@ class RunnerAdapter:
     @staticmethod
     def download_tarball(url: str, cache_dir: Path, filename: str) -> Path:
         """Downloads runner tarball into cache_dir atomically using a .part file."""
+        if not url.startswith("https://"):
+            raise WineboxError(f"Refusing non-HTTPS runner download URL: '{url}'")
+
         cache_dir.mkdir(parents=True, exist_ok=True)
         dest_file = cache_dir / filename
         if dest_file.exists() and dest_file.stat().st_size > 0:
@@ -149,22 +153,8 @@ class RunnerAdapter:
             with tarfile.open(archive_path, "r:*") as tf:
                 members = tf.getmembers()
                 for m in members:
-                    member_path = Path(m.name)
-                    if member_path.is_absolute() or ".." in member_path.parts:
-                        raise WineboxError(f"Unsafe archive entry path detected: '{m.name}'")
-                    target = (resolved_dest / member_path).resolve()
-                    if target != resolved_dest and not target.is_relative_to(resolved_dest):
-                        raise WineboxError(f"Archive entry escapes destination: '{m.name}'")
-                    if m.issym() or m.islnk():
-                        link_target = Path(m.linkname)
-                        if link_target.is_absolute():
-                            raise WineboxError(f"Unsafe absolute symlink inside archive: '{m.name}' -> '{m.linkname}'")
-                        link_resolved = (target.parent / link_target).resolve()
-                        if link_resolved != resolved_dest and not link_resolved.is_relative_to(resolved_dest):
-                            raise WineboxError(
-                                f"Escaping symlink inside archive: '{m.name}' -> '{m.linkname}'"
-                            )
-                tf.extractall(path=resolved_dest, members=members)
+                    FilesystemAdapter.validate_tar_member(m, resolved_dest)
+                FilesystemAdapter.extract_tar_members(tf, resolved_dest, members=members)
         except tarfile.TarError as e:
             raise WineboxError(f"Failed to extract archive '{archive_path.name}': {e}") from e
 

@@ -204,6 +204,20 @@ class TestRunnerService(unittest.TestCase):
         self.svc.remove_runner("wine-ext", delete_files=True, xdg_data_home=self.xdg_data)
         self.assertTrue(ext_dir.exists())
 
+    def test_download_rejects_non_https_and_share_dist_layout(self) -> None:
+        with self.assertRaises(WineboxError):
+            RunnerAdapter.download_tarball("http://example.invalid/wine.tar.xz", self.tmp_path, "wine.tar.xz")
+        with self.assertRaises(WineboxError):
+            RunnerAdapter.download_tarball("file:///etc/passwd", self.tmp_path, "passwd")
+
+        dist_dir = self.repo.runners_dir / "old-proton" / "dist" / "bin"
+        dist_dir.mkdir(parents=True)
+        wine_bin = dist_dir / "wine"
+        wine_bin.write_text("")
+        self.svc.register_custom_runner("old-proton", "Old Proton", wine_bin)
+        link = self.svc.share_runner("old-proton", xdg_data_home=self.xdg_data)
+        self.assertEqual(link.parent, self.xdg_data / "Steam" / "compatibilitytools.d")
+
 
 class TestRunnerCLI(unittest.TestCase):
     def setUp(self) -> None:

@@ -105,7 +105,7 @@ class RunnerService:
             raise WineboxError("Cannot share the system Wine runner.")
 
         parent_dir = runner.wine_bin.parent.parent
-        if parent_dir.name == "files":
+        if parent_dir.name in ("files", "dist"):
             kind = "proton"
             runner_dir = parent_dir.parent
         else:
