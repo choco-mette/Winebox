@@ -19,7 +19,14 @@ sed -e "s/^Version:.*/Version:        ${VERSION}/" \
 
 if command -v rpmbuild >/dev/null 2>&1; then
     rpmbuild --define "_topdir $RPM_STAGE" -bb "$RPM_STAGE/SPECS/winebox.spec"
-    echo "Built RPM package in: $RPM_STAGE/RPMS/noarch"
+    cp "$RPM_STAGE"/RPMS/noarch/*.rpm "$DIST_DIR/"
+    echo "Built RPM package(s) in: $DIST_DIR"
+elif command -v docker >/dev/null 2>&1; then
+    echo "rpmbuild not found on host; building RPM inside fedora:latest container..."
+    docker run --rm -v "$RPM_STAGE:/rpmbuild" fedora:latest bash -c \
+        "dnf install -y -q rpm-build python3-devel python3-rpm-macros && rpmbuild --define '_topdir /rpmbuild' -bb /rpmbuild/SPECS/winebox.spec && chown -R $(id -u):$(id -g) /rpmbuild"
+    cp "$RPM_STAGE"/RPMS/noarch/*.rpm "$DIST_DIR/"
+    echo "Built RPM package(s) via Docker in: $DIST_DIR"
 else
-    echo "Staged RPM build tree at: $RPM_STAGE (run 'rpmbuild --define \"_topdir \$PWD\" -bb SPECS/winebox.spec' on Fedora/RHEL/openSUSE)"
+    echo "Staged RPM build tree at: $RPM_STAGE (install rpmbuild or docker to build .rpm)"
 fi

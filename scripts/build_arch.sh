@@ -22,7 +22,14 @@ sed -e "s/^pkgver=.*/pkgver=${VERSION}/" \
 
 if command -v makepkg >/dev/null 2>&1; then
     (cd "$ARCH_DIR" && makepkg -sf --noconfirm)
-    echo "Built Arch package in: $ARCH_DIR"
+    cp "$ARCH_DIR"/*.pkg.tar.* "$DIST_DIR/"
+    echo "Built Arch package(s) in: $DIST_DIR"
+elif command -v docker >/dev/null 2>&1; then
+    echo "makepkg not found on host; building Arch package inside archlinux:latest container..."
+    docker run --rm -v "$ARCH_DIR:/pkg" archlinux:latest bash -c \
+        "pacman -Sy --noconfirm --needed base-devel python >/dev/null && useradd -m builder && chown -R builder:builder /pkg && su - builder -c 'cd /pkg && makepkg -sf --noconfirm --nodeps' && chown -R $(id -u):$(id -g) /pkg"
+    cp "$ARCH_DIR"/*.pkg.tar.* "$DIST_DIR/"
+    echo "Built Arch package(s) via Docker in: $DIST_DIR"
 else
     echo "Staged Arch PKGBUILD bundle at: $ARCH_DIR (run 'makepkg -si' on Arch Linux)"
 fi
