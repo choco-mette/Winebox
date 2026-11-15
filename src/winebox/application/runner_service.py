@@ -1,7 +1,7 @@
 """Wine runner application service."""
 
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 from winebox.common.exceptions import WineboxError
 from winebox.domain.models import Runner
 from winebox.infrastructure.fs_adapter import FilesystemAdapter
@@ -56,7 +56,12 @@ class RunnerService:
         version: Optional[str] = None,
         share: bool = False,
         xdg_data_home: Optional[Path] = None,
+        on_stage: Optional[Callable[[str], None]] = None,
+        on_download_progress: Optional[Callable[[int, Optional[int]], None]] = None,
+        on_extract_progress: Optional[Callable[[int, int], None]] = None,
     ) -> Tuple[Runner, Optional[Path]]:
+        if on_stage:
+            on_stage(f"Fetching release metadata for {source_key}...")
         releases = self.fetch_available_releases(source_key, limit=50)
         if not releases:
             raise WineboxError(f"No downloadable releases found for source '{source_key}'.")
@@ -76,10 +81,25 @@ class RunnerService:
             raise WineboxError(f"Runner '{runner_id}' is already installed at {dest_dir}.")
 
         cache_dir = self.repo.data_root / "cache" / "runners"
-        archive_path = RunnerAdapter.download_tarball(release["url"], cache_dir, release["filename"])
+        if on_stage:
+            on_stage(f"Downloading {release['filename']}...")
+        archive_path = RunnerAdapter.download_tarball(
+            release["url"],
+            cache_dir,
+            release["filename"],
+            on_progress=on_download_progress,
+        )
 
         try:
-            RunnerAdapter.safe_extract_tar(archive_path, dest_dir)
+            if on_stage:
+                on_stage(f"Validating & extracting {release['filename']}...")
+            RunnerAdapter.safe_extract_tar(
+                archive_path,
+                dest_dir,
+                on_progress=on_extract_progress,
+            )
+            if on_stage:
+                on_stage("Detecting Wine binaries & registering runner...")
             wine_bin, wineserver_bin = RunnerAdapter.detect_wine_binaries(dest_dir)
         except Exception:
             FilesystemAdapter.remove_tree(dest_dir)
@@ -94,6 +114,8 @@ class RunnerService:
 
         shared_link: Optional[Path] = None
         if share:
+            if on_stage:
+                on_stage("Creating shared ecosystem symlink...")
             shared_link = RunnerAdapter.create_shared_symlink(
                 dest_dir, release["kind"], xdg_data_home=xdg_data_home
             )

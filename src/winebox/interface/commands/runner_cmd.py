@@ -4,6 +4,16 @@ from pathlib import Path
 from typing import Optional
 import typer
 from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    SpinnerColumn,
+    TaskID,
+    TextColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
+)
 from rich.table import Table
 from winebox.application.runner_service import RunnerService
 from winebox.common.exceptions import WineboxError
@@ -103,7 +113,8 @@ def runner_install(
         selected_source = source
         selected_version = version
 
-        if not selected_source:
+        interactive_mode = source is None
+        if interactive_mode:
             sources = svc.list_sources()
             source_options = [(k, f"{k} — {m['description']}") for k, m in sources.items()]
             selected_source = tui_select("Select Runner Source", source_options)
@@ -111,7 +122,8 @@ def runner_install(
                 raise typer.Exit(code=0)
 
             if not selected_version:
-                releases = svc.fetch_available_releases(selected_source, limit=30)
+                with console.status(f"[cyan]Fetching releases for {selected_source}...[/cyan]"):
+                    releases = svc.fetch_available_releases(selected_source, limit=30)
                 if not releases:
                     console.print(f"[yellow]No downloadable releases found for '{selected_source}'.[/yellow]")
                     raise typer.Exit(code=1)
@@ -120,8 +132,48 @@ def runner_install(
                 if not selected_version:
                     raise typer.Exit(code=0)
 
-        console.print(f"Installing runner from [cyan]{selected_source}[/cyan] ({selected_version or 'latest'})...")
-        runner, shared_link = svc.install_runner(selected_source, version=selected_version, share=share)
+            if not share:
+                share = typer.confirm("Share this runner to Lutris/Steam?", default=False)
+
+        console.print(f"\nInstalling runner from [cyan]{selected_source}[/cyan] ([bold]{selected_version or 'latest'}[/bold])...")
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            DownloadColumn(),
+            TransferSpeedColumn(),
+            TimeRemainingColumn(),
+            console=console,
+        ) as progress:
+            stage_task = progress.add_task("[cyan]Preparing...", total=None)
+            dl_task: Optional[TaskID] = None
+            ext_task: Optional[TaskID] = None
+
+            def on_stage(msg: str) -> None:
+                progress.update(stage_task, description=f"[cyan]{msg}")
+
+            def on_download(downloaded: int, total: Optional[int]) -> None:
+                nonlocal dl_task
+                if dl_task is None:
+                    dl_task = progress.add_task("[green]Downloading", total=total)
+                progress.update(dl_task, completed=downloaded, total=total)
+
+            def on_extract(done: int, total: int) -> None:
+                nonlocal ext_task
+                if ext_task is None:
+                    ext_task = progress.add_task("[yellow]Extracting files", total=total)
+                progress.update(ext_task, completed=done, total=total, description=f"[yellow]Extracting ({done}/{total} files)")
+
+            runner, shared_link = svc.install_runner(
+                selected_source,
+                version=selected_version,
+                share=share,
+                on_stage=on_stage,
+                on_download_progress=on_download,
+                on_extract_progress=on_extract,
+            )
+            progress.update(stage_task, description="[green]Completed", total=1, completed=1)
+
         console.print(f"[bold green]✓[/bold green] Installed runner '[bold]{runner.id}[/bold]' ({runner.wine_bin})")
         if shared_link:
             console.print(f"[bold green]✓[/bold green] Shared symlink created at {shared_link}")

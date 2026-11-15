@@ -9,7 +9,7 @@ import tarfile
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from winebox.common.exceptions import WineboxError
 from winebox.infrastructure.fs_adapter import FilesystemAdapter
 
@@ -129,7 +129,12 @@ class RunnerAdapter:
         return x86_candidates[0]
 
     @staticmethod
-    def download_tarball(url: str, cache_dir: Path, filename: str) -> Path:
+    def download_tarball(
+        url: str,
+        cache_dir: Path,
+        filename: str,
+        on_progress: Optional[Callable[[int, Optional[int]], None]] = None,
+    ) -> Path:
         """Downloads runner tarball into cache_dir atomically using a .part file."""
         if not url.startswith("https://"):
             raise WineboxError(f"Refusing non-HTTPS runner download URL: '{url}'")
@@ -137,13 +142,26 @@ class RunnerAdapter:
         cache_dir.mkdir(parents=True, exist_ok=True)
         dest_file = cache_dir / filename
         if dest_file.exists() and dest_file.stat().st_size > 0:
+            if on_progress:
+                size = dest_file.stat().st_size
+                on_progress(size, size)
             return dest_file
 
         part_file = cache_dir / f"{filename}.part"
         req = urllib.request.Request(url, headers={"User-Agent": "WineBox-RunnerManager/1.0"})
         try:
             with urllib.request.urlopen(req, timeout=120) as resp, open(part_file, "wb") as out:
-                shutil.copyfileobj(resp, out, length=1024 * 1024)
+                content_length = resp.headers.get("Content-Length")
+                total_bytes = int(content_length) if content_length and content_length.isdigit() else None
+                downloaded = 0
+                while True:
+                    chunk = resp.read(256 * 1024)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+                    downloaded += len(chunk)
+                    if on_progress:
+                        on_progress(downloaded, total_bytes)
             os.replace(part_file, dest_file)
             return dest_file
         except (urllib.error.URLError, TimeoutError, OSError) as e:
@@ -151,7 +169,11 @@ class RunnerAdapter:
             raise WineboxError(f"Failed to download runner '{filename}': {e}") from e
 
     @staticmethod
-    def safe_extract_tar(archive_path: Path, dest_dir: Path) -> Path:
+    def safe_extract_tar(
+        archive_path: Path,
+        dest_dir: Path,
+        on_progress: Optional[Callable[[int, int], None]] = None,
+    ) -> Path:
         """Safely extracts a .tar.xz / .tar.gz archive after validating against path traversal."""
         if not archive_path.exists():
             raise WineboxError(f"Archive not found: {archive_path}")
@@ -164,7 +186,17 @@ class RunnerAdapter:
                 members = tf.getmembers()
                 for m in members:
                     FilesystemAdapter.validate_tar_member(m, resolved_dest)
-                FilesystemAdapter.extract_tar_members(tf, resolved_dest, members=members)
+
+                total = len(members)
+                if on_progress and total > 0:
+                    on_progress(0, total)
+                    batch_size = 50
+                    for idx in range(0, total, batch_size):
+                        batch = members[idx : idx + batch_size]
+                        FilesystemAdapter.extract_tar_members(tf, resolved_dest, members=batch)
+                        on_progress(min(idx + len(batch), total), total)
+                else:
+                    FilesystemAdapter.extract_tar_members(tf, resolved_dest, members=members)
         except tarfile.TarError as e:
             raise WineboxError(f"Failed to extract archive '{archive_path.name}': {e}") from e
 

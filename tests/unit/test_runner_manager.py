@@ -236,6 +236,39 @@ class TestRunnerService(unittest.TestCase):
             assert picked_arm is not None
             self.assertEqual(picked_arm["name"], "GE-Proton11-9-aarch64.tar.gz")
 
+    def test_install_runner_emits_stage_and_extract_callbacks(self) -> None:
+        archive_path = self.tmp_path / "GE-Proton9-20.tar.gz"
+        archive_path.write_bytes(
+            _make_tar_bytes(
+                [
+                    ("GE-Proton9-20/files/bin/wine", "file", "#!/bin/sh\n"),
+                    ("GE-Proton9-20/files/bin/wineserver", "file", "#!/bin/sh\n"),
+                ]
+            )
+        )
+        fake_release = [
+            {
+                "source": "ge-proton",
+                "kind": "proton",
+                "version": "GE-Proton9-20",
+                "filename": "GE-Proton9-20.tar.gz",
+                "url": "https://example.invalid/GE-Proton9-20.tar.gz",
+            }
+        ]
+        stages: list = []
+        extract_ticks: list = []
+        with patch.object(RunnerAdapter, "fetch_releases", return_value=fake_release), patch.object(
+            RunnerAdapter, "download_tarball", return_value=archive_path
+        ):
+            self.svc.install_runner(
+                "ge-proton",
+                version="GE-Proton9-20",
+                on_stage=stages.append,
+                on_extract_progress=lambda d, t: extract_ticks.append((d, t)),
+            )
+        self.assertGreaterEqual(len(stages), 3)
+        self.assertEqual(extract_ticks[-1], (2, 2))
+
 
 class TestRunnerCLI(unittest.TestCase):
     def setUp(self) -> None:
@@ -287,10 +320,12 @@ class TestRunnerCLI(unittest.TestCase):
                 unittest.mock.MagicMock(id="wine-builds-9-21", wine_bin=Path("/tmp/bin/wine")),
                 None,
             )
-            res = self.cli.invoke(app, ["runner", "install"], input="1\n1\n")
+            res = self.cli.invoke(app, ["runner", "install"], input="1\n1\nn\n")
             self.assertEqual(res.exit_code, 0)
             mock_fetch.assert_called_once_with("wine-builds", limit=30)
-            mock_install.assert_called_once_with("wine-builds", version="9.21", share=False)
+            self.assertEqual(mock_install.call_args.args, ("wine-builds",))
+            self.assertEqual(mock_install.call_args.kwargs["version"], "9.21")
+            self.assertFalse(mock_install.call_args.kwargs["share"])
 
 
 if __name__ == "__main__":
