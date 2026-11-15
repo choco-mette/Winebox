@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import shutil
 import tarfile
 import urllib.error
@@ -180,13 +181,13 @@ class RunnerAdapter:
                 candidates.append(subdirs[0])
 
         for base in candidates:
-            for prefix in (base, base / "files"):
+            for prefix in (base, base / "files", base / "dist"):
                 wine_bin = prefix / "bin" / "wine"
                 if wine_bin.exists():
                     wineserver_bin = prefix / "bin" / "wineserver"
                     return wine_bin, (wineserver_bin if wineserver_bin.exists() else None)
 
-        raise WineboxError(f"Could not find 'bin/wine' or 'files/bin/wine' inside '{runner_root}'")
+        raise WineboxError(f"Could not find 'bin/wine', 'files/bin/wine', or 'dist/bin/wine' inside '{runner_root}'")
 
     @classmethod
     def create_shared_symlink(
@@ -219,11 +220,67 @@ class RunnerAdapter:
                 link_path.unlink(missing_ok=True)
 
     @classmethod
+    def _get_steam_scan_dirs(cls, xdg_data_home: Optional[Path] = None) -> List[Path]:
+        """Collects Steam compatibilitytools.d and steamapps/common directories (native, Debian, Flatpak, extra libraries)."""
+        steam_roots: List[Path] = [cls.get_xdg_data_home(xdg_data_home) / "Steam"]
+        if xdg_data_home is None:
+            home = Path.home()
+            steam_roots.extend(
+                [
+                    home / ".steam" / "root",
+                    home / ".steam" / "steam",
+                    home / ".steam" / "debian-installation",
+                    home / ".var" / "app" / "com.valvesoftware.Steam" / ".local" / "share" / "Steam",
+                ]
+            )
+
+        scan_dirs: List[Path] = []
+        seen_roots: set[Path] = set()
+        seen_dirs: set[Path] = set()
+
+        def _add_dir(path: Path) -> None:
+            if path.exists() and path.is_dir():
+                resolved = path.resolve()
+                if resolved not in seen_dirs:
+                    seen_dirs.add(resolved)
+                    scan_dirs.append(resolved)
+
+        for root in steam_roots:
+            if not root.exists():
+                continue
+            resolved_root = root.resolve()
+            if resolved_root in seen_roots:
+                continue
+            seen_roots.add(resolved_root)
+
+            _add_dir(resolved_root / "compatibilitytools.d")
+            _add_dir(resolved_root / "steamapps" / "common")
+
+            vdf = resolved_root / "steamapps" / "libraryfolders.vdf"
+            if vdf.is_file():
+                try:
+                    content = vdf.read_text(encoding="utf-8", errors="ignore")
+                    for match in re.finditer(r'"path"\s+"([^"]+)"', content):
+                        _add_dir(Path(match.group(1)) / "steamapps" / "common")
+                except OSError:
+                    pass
+
+        return scan_dirs
+
+    @classmethod
     def scan_external_runners(cls, xdg_data_home: Optional[Path] = None) -> List[Dict[str, Any]]:
-        """Scans user Lutris and Steam directories for existing Wine/Proton runners."""
+        """Scans user Lutris and Steam directories (including steamapps/common Proton) for Wine/Proton runners."""
         found: List[Dict[str, Any]] = []
-        for kind in ("wine", "proton"):
-            scan_dir = cls.get_shared_target_dir(kind, xdg_data_home=xdg_data_home)
+        seen_ids: set[str] = set()
+        seen_bins: set[Path] = set()
+
+        scan_targets: List[Tuple[str, Path]] = [
+            ("wine", cls.get_shared_target_dir("wine", xdg_data_home=xdg_data_home))
+        ]
+        for steam_dir in cls._get_steam_scan_dirs(xdg_data_home=xdg_data_home):
+            scan_targets.append(("proton", steam_dir))
+
+        for kind, scan_dir in scan_targets:
             if not scan_dir.exists() or not scan_dir.is_dir():
                 continue
             for entry in sorted(scan_dir.iterdir()):
@@ -231,15 +288,21 @@ class RunnerAdapter:
                     continue
                 try:
                     wine_bin, wineserver_bin = cls.detect_wine_binaries(entry)
-                    found.append(
-                        {
-                            "id": entry.name.lower().replace(" ", "-"),
-                            "name": entry.name,
-                            "kind": kind,
-                            "wine_bin": wine_bin,
-                            "wineserver_bin": wineserver_bin,
-                        }
-                    )
                 except WineboxError:
                     continue
+
+                runner_id = re.sub(r"[^a-z0-9]+", "-", entry.name.lower()).strip("-")
+                if not runner_id or runner_id in seen_ids or wine_bin in seen_bins:
+                    continue
+                seen_ids.add(runner_id)
+                seen_bins.add(wine_bin)
+                found.append(
+                    {
+                        "id": runner_id,
+                        "name": entry.name,
+                        "kind": kind,
+                        "wine_bin": wine_bin,
+                        "wineserver_bin": wineserver_bin,
+                    }
+                )
         return found

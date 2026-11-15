@@ -164,8 +164,12 @@ class TestRunnerService(unittest.TestCase):
         steam_proton.mkdir(parents=True)
         (steam_proton / "wine").write_text("")
 
+        official_proton = self.xdg_data / "Steam" / "steamapps" / "common" / "Proton - Experimental" / "files" / "bin"
+        official_proton.mkdir(parents=True)
+        (official_proton / "wine").write_text("")
+
         added = self.svc.scan_external_runners(xdg_data_home=self.xdg_data)
-        self.assertEqual({r.id for r in added}, {"wine-ge-8-26", "ge-proton9-11"})
+        self.assertEqual({r.id for r in added}, {"wine-ge-8-26", "ge-proton9-11", "proton-experimental"})
 
         added_again = self.svc.scan_external_runners(xdg_data_home=self.xdg_data)
         self.assertEqual(added_again, [])
