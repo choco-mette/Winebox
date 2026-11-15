@@ -1,193 +1,120 @@
 # WineBox
 
-Orchestrator keamanan untuk mengelola dan menjalankan aplikasi Windows di Linux melalui Wine dengan isolasi Bubblewrap (`bwrap`).
+**WineBox** is a security-focused Linux orchestrator for managing and running Windows applications and games inside per-prefix **Bubblewrap (`bwrap`)** sandboxes, featuring a native **GTK4 + Libadwaita** desktop GUI and a **Typer** CLI.
 
-## Prinsip Utama
-- **Hardware Allowed, Host Filesystem Denied**
-- **Isolated by Default. Hardware Access by Policy.**
-- **No Sandbox, No Execution.**
+## Core Security Principles
 
----
-
-## Prasyarat Sistem
-- **OS:** Distribusi Linux modern (Ubuntu/Debian, Fedora, Arch) dengan kernel >= 5.4.
-- **Unprivileged User Namespaces:** Aktif pada host.
-- **Bubblewrap:** Biner `bwrap` terpasang di host (`sudo apt install bubblewrap` / `pacman -S bubblewrap`).
-- **Wine:** Biner `wine` terpasang di host (`sudo apt install wine` / `pacman -S wine`).
-- **Python:** Python >= 3.11.
+- **Hardware Allowed, Host Filesystem Denied** — Applications can access required display, audio, GPU, and controller devices without exposing your host `$HOME`.
+- **Isolated by Default. Hardware Access by Policy.** — Every permission (`display`, `audio`, `network`, `gpu`, `gamepad`, `hidraw`, `mic`) and custom mount is explicitly governed by a `SecurityProfile` / `SecurityPolicy`.
+- **No Sandbox, No Execution.** — Windows binaries and Wine tools (`winecfg`, `regedit`, `winetricks`) are never executed directly on the host outside Bubblewrap.
 
 ---
 
-## Instalasi
+## Key Features
 
-### Dari Repositori Lokal
+- **Per-Prefix Bubblewrap Sandboxing**: Isolated virtual `HOME` per prefix, symlink-escape auditing, `Z:` drive neutralization, `PULSE_SOURCE=null` microphone mute when `mic` is disabled, and `/dev/hidraw*` passthrough for wheels, flight sticks, and DualSense controllers.
+- **GTK4 + Libadwaita Desktop GUI (`winebox gui`)**:
+  - **Library**: Search, `Play`/`Kill`, Lutris-style overflow actions (`View Logs`, `Open Prefix Files`, `Winecfg`, `Winetricks`, `Create/Remove Desktop Shortcut`, `Remove`), and a 4-tab **Configure App** dialog (*App & Runner*, *Sandbox*, *Env & Mounts*, *Shortcut*).
+  - **Prefixes & File Manager**: Create prefixes, launch sandboxed Wine tools, audit, backup/restore snapshots, kill processes, and browse/manage files inside prefixes.
+  - **Runners**: Manage system Wine and download/install/share Proton/Wine-GE runners with live progress.
+  - **Security Profiles**: Built-in presets (`permissive`, `balanced`, `zero-trust`, `paranoid`) plus full custom profile creation and deletion.
+  - **System Doctor**: Verify host `bwrap`, unprivileged user namespaces, Wine, GPU/DRI, and audio readiness.
+- **Persistent XDG Shortcuts**: Shortcut settings (`menu_enabled`, `desktop_enabled`, custom icon, categories, `Terminal`, `StartupWMClass`) persisted in SQLite and synced to `~/.local/share/applications/` and `~/Desktop`.
+
+---
+
+## System Prerequisites
+
+- **OS**: Modern Linux distribution (Debian/Ubuntu, Fedora/RHEL, Arch/Manjaro) with Linux kernel `>= 5.4` and unprivileged user namespaces enabled.
+- **Runtime**: `bubblewrap` (`bwrap`), `python3 >= 3.11`, and `wine` (or a Proton/Wine-GE runner installed via `winebox runner`).
+- **GUI**: `python3-gi` / `python-gobject`, `gtk4`, and `libadwaita`.
+
+---
+
+## Installation
+
+### Debian / Ubuntu (`.deb`)
 ```bash
-# Buat virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
+sudo apt install ./winebox_0.1.0_all.deb
+```
 
-# Install WineBox dalam mode editable
+### Fedora / RHEL (`.rpm`)
+```bash
+sudo dnf install ./winebox-0.1.0-1.fc45.noarch.rpm
+```
+
+### Arch Linux / Manjaro / CachyOS (`.pkg.tar.zst`)
+```bash
+sudo pacman -U ./winebox-0.1.0-1-any.pkg.tar.zst
+```
+
+### Portable Installer (Any Linux Distro, No `sudo` Required)
+```bash
+tar -xzf winebox-0.1.0-linux-noarch.tar.gz
+cd winebox-0.1.0
+./scripts/install.sh
+```
+
+### From Source (Development)
+```bash
+python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
 pip install -e .
 ```
 
----
-
-## Panduan Penggunaan CLI
-
-### 1. Bantuan Perintah (`help`)
-Tampilkan panduan dan opsi perintah kapan saja:
+### Building Multi-Distro Packages
 ```bash
-# Menampilkan bantuan umum & daftar seluruh perintah
-winebox help
-
-# Menampilkan bantuan terperinci per sub-perintah
-winebox help prefix
-winebox help app
-winebox help install
-winebox help import
-winebox help runner
-winebox help system
+./scripts/build_all.sh
 ```
+*(Builds `.tar.gz`, `.deb`, and uses Docker `archlinux:latest` / `fedora:latest` to produce `.pkg.tar.zst` and `.rpm` when `makepkg`/`rpmbuild` are not installed on the host.)*
 
 ---
 
-### 2. Diagnosa Kesiapan Sistem (`doctor`)
-Periksa kesiapan dependensi sistem (bwrap, wine, userns, display, audio, GPU):
+## Quick Start
+
 ```bash
+# Launch the GTK4 + Libadwaita desktop GUI
+winebox gui
+
+# Check host readiness (bwrap, userns, Wine, GPU, audio)
 winebox system doctor
-```
-Jika ada kendala (misal user namespaces dibatasi), doctor memberikan rekomendasi langkah perbaikan.
 
----
+# Interactive wizard to install or register an .exe/.msi
+winebox add /path/to/app_or_installer.exe
 
-### 3. Mengelola Wine Prefix
-Wine Prefix adalah lingkungan Windows virtual terisolasi. WineBox mengisolasi direktori `$HOME` host dan membuat virtual HOME privat per prefix.
-
-```bash
-# Membuat prefix baru (sekaligus inisialisasi wineboot di dalam sandbox)
-winebox prefix create gaming --name "Gaming Environment"
-
-# Membuat prefix tanpa inisialisasi wineboot (cepat)
-winebox prefix create minimal-prefix --no-wineboot
-
-# Melihat daftar semua prefix
-winebox prefix list
-
-# Menjalankan audit keamanan prefix (memeriksa symlink escape & drive Z:)
-winebox prefix audit gaming
-
-# Menghapus prefix beserta datanya
-winebox prefix remove gaming
-```
-
----
-
-### 4. Memasang Aplikasi Windows (`install`)
-Jalankan wizard instalasi interaktif untuk file installer `.exe` atau `.msi`:
-```bash
-winebox install /path/to/installer.exe
-```
-Wizard akan:
-1. Meminta Anda memilih prefix tujuan (atau membuat prefix baru).
-2. Mengonfigurasi izin akses jaringan (network).
-3. Mengeksekusi installer di dalam sandbox Bubblewrap secara aman (direktori sumber di-mount read-only).
-4. Menetralkan mapping drive berbahaya (`Z:`).
-5. Memindai otomatis biner `.exe` baru yang berhasil dipasang dan menawarkan pendaftaran aplikasi.
-
----
-
-### 5. Menjalankan & Mengelola Aplikasi (`app`)
-
-```bash
-# Menjalankan aplikasi Windows di dalam sandbox
+# Run a registered application inside its sandbox
 winebox app run <app_id>
 
-# Menjalankan aplikasi dengan argumen tambahan
-winebox app run <app_id> -- --option argument
-
-# Melihat daftar aplikasi terdaftar
-winebox app list
-
-# Melihat detail konfigurasi & kebijakan keamanan aplikasi
-winebox app info <app_id>
-
-# Mendaftarkan executable yang sudah ada di dalam prefix secara manual
-winebox app register \
-  --id notepad \
-  --name "Wine Notepad" \
-  --prefix gaming \
-  --exe "drive_c/windows/notepad.exe"
-
-# Menghapus registrasi aplikasi (tanpa menghapus prefix)
-winebox app remove notepad
-```
-
----
-
-### 6. Mengimpor Aplikasi Portable (`import app`)
-Salin folder aplikasi portable Windows ke dalam prefix tanpa perlu installer:
-```bash
-winebox import app /path/to/portable_folder \
-  --prefix gaming \
-  --id my-editor \
-  --name "Portable Code Editor" \
-  --exe "editor.exe"
-```
-WineBox akan:
-- Mengkloning folder ke staging sementara.
-- Memindai symlink untuk memastikan tidak ada link yang keluar ke filesystem host.
-- Memindahkan aplikasi ke `drive_c/Program Files/my-editor/` di prefix target secara atomik.
-
----
-
-### 7. Mengimpor Wine Prefix Eksternal (`import prefix`)
-Migrasi prefix lama (dari Lutris, Bottles, atau Wine manual) ke lingkungan aman WineBox:
-```bash
-winebox import prefix /path/to/old_prefix \
-  --id imported-daw \
-  --name "DAW Audio Suite"
-```
-WineBox secara otomatis:
-- Menetralkan symlink `dosdevices/z:` yang menunjuk ke root host `/`.
-- Mengaudit integritas registry dan symlink.
-- Membangun isolasi virtual HOME privat dan file lock `prefix.lock`.
-
----
-
-### 8. Mengelola Runner Wine (`runner`)
-
-```bash
-# Melihat daftar runner yang tersedia (System Wine default)
+# Manage prefixes, security profiles, and runners
+winebox prefix list
+winebox profile list
 winebox runner list
-
-# Mendaftarkan runner Wine custom
-winebox runner register custom-proton \
-  --name "GE-Proton Custom" \
-  --wine /path/to/runner/bin/wine \
-  --wineserver /path/to/runner/bin/wineserver
 ```
 
 ---
 
-## Struktur Direktori Data (Standar XDG)
+## XDG Data & Configuration Layout
 
-Semua data dan konfigurasi WineBox tersimpan rapi di direktori pengguna (Rootless):
-- **Data:** `~/.local/share/winebox/`
-  - `applications/<app-id>.toml`: Metadata aplikasi terdaftar.
-  - `prefixes/<prefix-id>/`: Lingkungan Wine (`prefix/`, `home/`, `config.toml`, `prefix.lock`).
-  - `runners/`: Registrasi custom runner.
-  - `staging/`: Area kerja sementara untuk clone & audit.
-- **Konfigurasi Global:** `~/.config/winebox/config.toml`
+All WineBox data is stored rootless under standard XDG directories:
 
----
-
-## Dokumentasi Teknis
-- [SAD.md](SAD.md): Software Architecture Document lengkap.
-- [docs/03-decisions/adr/](docs/03-decisions/adr/): 19 Architecture Decision Records (ADR).
-- [docs/04-security/threat-model.md](docs/04-security/threat-model.md): Model ancaman dan arsitektur keamanan.
-- [docs/05-specifications/](docs/05-specifications/): Spesifikasi teknis sandbox, deployment, prefix, runner, config, dan CLI.
+- **Data (`~/.local/share/winebox/`)**:
+  - `winebox.db`: Centralized SQLite configuration database (prefixes, applications, security profiles, runners, shortcut metadata).
+  - `prefixes/<prefix-id>/`: Isolated Wine prefix (`prefix/`, isolated `home/`, `logs/`, `prefix.lock`).
+  - `runners/`: Managed custom Wine/Proton runners.
+  - `cache/winetricks/`: Shared Winetricks download cache.
+- **Configuration (`~/.config/winebox/`)**: Global WineBox settings.
 
 ---
 
-## Lisensi
+## Technical Documentation
+
+- [SAD.md](SAD.md) — Software Architecture Document
+- [docs/03-decisions/adr/](docs/03-decisions/adr/) — 28 Architecture Decision Records (ADRs)
+- [docs/04-security/threat-model.md](docs/04-security/threat-model.md) — Threat Model and Security Architecture
+- [docs/05-specifications/](docs/05-specifications/) — Technical Specifications (Sandbox, Prefix, Runner, Deployment, CLI)
+
+---
+
+## License
+
 MIT
