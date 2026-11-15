@@ -145,24 +145,16 @@ def runner_install(
             TimeRemainingColumn(),
             console=console,
         ) as progress:
-            stage_task = progress.add_task("[cyan]Preparing...", total=None)
-            dl_task: Optional[TaskID] = None
-            ext_task: Optional[TaskID] = None
+            dl_task: TaskID = progress.add_task("[cyan]Preparing...", total=None)
 
             def on_stage(msg: str) -> None:
-                progress.update(stage_task, description=f"[cyan]{msg}")
+                progress.update(dl_task, description=f"[cyan]{msg}")
 
             def on_download(downloaded: int, total: Optional[int]) -> None:
-                nonlocal dl_task
-                if dl_task is None:
-                    dl_task = progress.add_task("[green]Downloading", total=total)
-                progress.update(dl_task, completed=downloaded, total=total)
+                progress.update(dl_task, description="[green]Downloading", completed=downloaded, total=total)
 
             def on_extract(done: int, total: int) -> None:
-                nonlocal ext_task
-                if ext_task is None:
-                    ext_task = progress.add_task("[yellow]Extracting files", total=total)
-                progress.update(ext_task, completed=done, total=total, description=f"[yellow]Extracting ({done}/{total} files)")
+                progress.update(dl_task, description=f"[yellow]Extracting ({done}/{total} files)")
 
             runner, shared_link = svc.install_runner(
                 selected_source,
@@ -172,7 +164,7 @@ def runner_install(
                 on_download_progress=on_download,
                 on_extract_progress=on_extract,
             )
-            progress.update(stage_task, description="[green]Completed", total=1, completed=1)
+            progress.update(dl_task, description="[green]Completed")
 
         console.print(f"[bold green]✓[/bold green] Installed runner '[bold]{runner.id}[/bold]' ({runner.wine_bin})")
         if shared_link:
