@@ -1,13 +1,15 @@
 """Wine prefix management CLI commands."""
 
-from typing import Optional
+from typing import List, Optional
 import typer
 from rich.console import Console
 from rich.table import Table
 from winebox.application.prefix_service import PrefixService
+from winebox.application.winetricks_service import WinetricksService
 from winebox.common.exceptions import WineboxError
 from winebox.infrastructure.log_manager import LogManager
 from winebox.infrastructure.sqlite_repository import SqliteRepository
+from winebox.interface.tui import tui_multiselect, tui_select
 
 prefix_app = typer.Typer(help="Manage isolated Wine prefixes.")
 console = Console()
@@ -133,4 +135,79 @@ def prefix_logs(
             console.print(f"[dim]{line}[/dim]")
         else:
             console.print(line)
+
+
+WINETRICKS_CATALOG = [
+    # DirectX / Vulkan
+    ("dxvk", "DXVK — Vulkan-based D3D9/D3D10/D3D11 translation layer"),
+    ("vkd3d", "VKD3D — Direct3D 12 to Vulkan translation library"),
+    ("d3dcompiler_47", "D3DCompiler_47 — Microsoft Direct3D shader compiler"),
+    ("d3dx9", "D3DX9 — Microsoft Direct3D 9 auxiliary libraries"),
+    # Visual C++ Runtimes
+    ("vcrun2022", "Visual C++ 2015-2022 — MSVC runtime libraries (x86 & x64)"),
+    ("vcrun2019", "Visual C++ 2019 — MSVC runtime libraries"),
+    ("vcrun2015", "Visual C++ 2015 — MSVC runtime libraries"),
+    ("vcrun2013", "Visual C++ 2013 — MSVC runtime libraries"),
+    ("vcrun2010", "Visual C++ 2010 — MSVC runtime libraries"),
+    # .NET Frameworks
+    ("dotnet48", ".NET Framework 4.8 — Microsoft .NET runtime"),
+    ("dotnet40", ".NET Framework 4.0 — Microsoft .NET runtime"),
+    # Fonts & Audio
+    ("corefonts", "Corefonts — Microsoft TrueType core fonts (Arial, Times, Courier)"),
+    ("faudio", "FAudio — Accurate XAudio reimplementation for games"),
+    # Actions
+    ("gui", "🖥 Open Winetricks GUI (Zenity desktop dialog)"),
+]
+
+
+@prefix_app.command("winetricks")
+def prefix_winetricks(
+    prefix_id: Optional[str] = typer.Argument(None, help="Prefix ID to run winetricks on (interactive if omitted)"),
+    verbs: List[str] = typer.Argument(None, help="Winetricks package verbs to install (e.g. vcrun2022 dxvk)"),
+) -> None:
+    """Run Winetricks inside the Bubblewrap sandbox with shared cache across prefixes (ADR-023)."""
+    prefix_svc = PrefixService()
+    prefixes = prefix_svc.list_prefixes()
+    if not prefixes:
+        console.print("[yellow]No prefixes found. Create one first with 'winebox prefix create <id>'.[/yellow]")
+        raise typer.Exit(code=1)
+
+    target_prefix = prefix_id
+    if not target_prefix:
+        pref_options = [(p.id, f"{p.id} ({p.name})") for p in prefixes]
+        target_prefix = tui_select("Select Wine Prefix for Winetricks", pref_options, default_index=0)
+
+    selected_verbs = list(verbs or [])
+    if not selected_verbs:
+        catalog_options = list(WINETRICKS_CATALOG)
+        catalog_options.append(("__custom__", "⌨ Enter custom verbs manually"))
+
+        chosen = tui_multiselect("Select Winetricks Packages to Install", catalog_options)
+        if not chosen:
+            console.print("[dim]No winetricks packages selected. Operation cancelled.[/dim]")
+            return
+
+        if "__custom__" in chosen:
+            chosen.remove("__custom__")
+            custom_input = typer.prompt("Enter package verbs separated by space (e.g. vcrun2015 mfc42)")
+            chosen.extend(custom_input.split())
+
+        selected_verbs = chosen
+
+    console.print(f"\n[bold cyan]Running Winetricks on prefix '{target_prefix}'...[/bold cyan]")
+    console.print(f"[dim]Verbs:[/dim] [green]{', '.join(selected_verbs) if selected_verbs else 'GUI'}[/green]\n")
+
+    wt_svc = WinetricksService()
+    try:
+        wt_svc.run_winetricks(
+            prefix_id=target_prefix,
+            verbs=selected_verbs,
+            unattended="gui" not in selected_verbs,
+            inherit_stdio=True,
+        )
+        console.print(f"\n[bold green]✓[/bold green] Winetricks execution on prefix '[bold cyan]{target_prefix}[/bold cyan]' completed successfully.")
+    except WineboxError as e:
+        console.print(f"\n[bold red]Winetricks Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
 
