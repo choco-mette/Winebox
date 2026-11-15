@@ -1,11 +1,12 @@
 """Windows application management and execution CLI commands."""
 
-from typing import List
+from typing import List, Optional
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from winebox.application.app_service import AppService
+from winebox.application.desktop_service import DesktopService
 from winebox.application.execution_service import ExecutionService
 from winebox.common.exceptions import WineboxError
 
@@ -134,3 +135,26 @@ def app_remove(
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(code=1)
 
+
+@app_app.command("desktop")
+def app_desktop(
+    app_id: str = typer.Argument(..., help="Application ID to create/remove desktop shortcut for"),
+    icon: Optional[str] = typer.Option(None, "--icon", help="Path to icon file (.png/.svg/.ico) or icon name"),
+    categories: Optional[str] = typer.Option("Game;Utility;", "--categories", help="XDG Categories separated by semicolons"),
+    remove: bool = typer.Option(False, "--remove", "-r", help="Remove the desktop shortcut"),
+) -> None:
+    """Create or remove a Freedesktop .desktop shortcut for an application (ADR-024)."""
+    svc = DesktopService()
+    try:
+        if remove:
+            removed = svc.remove_desktop_entry(app_id)
+            if removed:
+                console.print(f"[bold green]✓[/bold green] Desktop shortcut for '{app_id}' removed.")
+            else:
+                console.print(f"[yellow]No desktop shortcut found for '{app_id}'.[/yellow]")
+        else:
+            path = svc.create_desktop_entry(app_id, icon=icon, categories=categories)
+            console.print(f"[bold green]✓[/bold green] Desktop shortcut created: [cyan]{path}[/cyan]")
+    except WineboxError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise typer.Exit(code=1)

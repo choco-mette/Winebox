@@ -6,6 +6,7 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 from winebox.application.app_service import AppService
+from winebox.application.desktop_service import DesktopService
 from winebox.application.import_service import ImportService
 from winebox.application.install_service import InstallService
 from winebox.application.lutris_service import LutrisService
@@ -121,7 +122,6 @@ def add_wizard(
                     exe_rel_path=chosen_exe,
                     profile_id=chosen_profile,
                 )
-            _print_summary_panel(app_name, app_id, target_prefix, chosen_profile, chosen_exe, "Setup Completed")
         else:
             prof_obj = profile_svc.get_profile(chosen_profile)
             install_svc = InstallService()
@@ -149,7 +149,6 @@ def add_wizard(
                     exe_path=chosen_exe,
                     profile_id=chosen_profile,
                 )
-                _print_summary_panel(app_name, app_id, target_prefix, chosen_profile, chosen_exe, "Installation Completed")
 
         # Step 6: Optional Lutris Integration (ADR-022)
         if (mode == "portable" or chosen_exe != "__skip__") and LutrisAdapter.find_lutris_binary():
@@ -167,19 +166,55 @@ def add_wizard(
                     f"[bold green]✓[/bold green] Lutris script generated ([dim]{yaml_file}[/dim]). "
                     "Please click [bold cyan]Install[/bold cyan] on the Lutris prompt window."
                 )
+
+        # Step 7: Optional Desktop Shortcut Creation (ADR-024)
+        desktop_path = None
+        if mode == "portable" or chosen_exe != "__skip__":
+            desktop_choice = tui_select(
+                "Create Desktop Shortcut (.desktop)?",
+                [
+                    ("yes", "Yes — Add to Linux Application Menu"),
+                    ("no", "No — Keep in WineBox only"),
+                ],
+                default_index=0,
+            )
+            if desktop_choice == "yes":
+                desktop_path = DesktopService().create_desktop_entry(app_id)
+                console.print(f"[bold green]✓[/bold green] Desktop shortcut created ([dim]{desktop_path}[/dim]).")
+
+        if mode == "portable" or chosen_exe != "__skip__":
+            _print_summary_panel(
+                app_name,
+                app_id,
+                target_prefix,
+                chosen_profile,
+                chosen_exe,
+                "Setup Completed" if mode == "portable" else "Installation Completed",
+                desktop_file=desktop_path,
+            )
     except WineboxError as e:
         console.print(f"[bold red]Setup Error:[/bold red] {e}")
         raise typer.Exit(code=1)
 
 
-def _print_summary_panel(name: str, app_id: str, prefix: str, profile: str, exe: str, title: str) -> None:
+def _print_summary_panel(
+    name: str,
+    app_id: str,
+    prefix: str,
+    profile: str,
+    exe: str,
+    title: str,
+    desktop_file: Optional[Path] = None,
+) -> None:
+    desktop_line = f"\n• [bold]Desktop Shortcut:[/bold] [cyan]{desktop_file}[/cyan]" if desktop_file else ""
     console.print(
         Panel(
             f"[bold green]✓ Game / Application successfully added![/bold green]\n\n"
             f"• [bold]Name:[/bold] {name} ([cyan]{app_id}[/cyan])\n"
             f"• [bold]Prefix:[/bold] {prefix}\n"
             f"• [bold]Profile:[/bold] {profile}\n"
-            f"• [bold]Executable:[/bold] {exe}\n\n"
+            f"• [bold]Executable:[/bold] {exe}"
+            f"{desktop_line}\n\n"
             f"Launch command:\n"
             f"  [bold yellow]winebox app run {app_id}[/bold yellow]",
             title=f"[bold green]{title}[/bold green]",

@@ -1,6 +1,7 @@
 """Application registration and metadata management service."""
 
 from typing import Any, List, Optional
+from winebox.application.desktop_service import DesktopService
 from winebox.domain.models import Application, SecurityPolicy
 from winebox.infrastructure.sqlite_repository import SqliteRepository
 
@@ -42,5 +43,9 @@ class AppService:
         return app
 
     def remove_app(self, app_id: str) -> None:
+        try:
+            DesktopService(self.repo).remove_desktop_entry(app_id)
+        except Exception:
+            pass
         self.repo.delete_app(app_id)
 
