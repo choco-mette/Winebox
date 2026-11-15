@@ -218,6 +218,24 @@ class TestRunnerService(unittest.TestCase):
         link = self.svc.share_runner("old-proton", xdg_data_home=self.xdg_data)
         self.assertEqual(link.parent, self.xdg_data / "Steam" / "compatibilitytools.d")
 
+    def test_pick_asset_skips_aarch64_on_x86_64(self) -> None:
+        assets = [
+            {"name": "GE-Proton11-9-aarch64.tar.gz", "browser_download_url": "https://example.invalid/arm.tar.gz"},
+            {"name": "GE-Proton11-9.tar.gz", "browser_download_url": "https://example.invalid/x86.tar.gz"},
+            {"name": "GE-Proton11-9.sha512sum", "browser_download_url": "https://example.invalid/sha"},
+        ]
+        with patch("winebox.infrastructure.runner_adapter.platform.machine", return_value="x86_64"):
+            picked = RunnerAdapter._pick_asset(assets, "ge-proton", ".tar.gz")
+            self.assertIsNotNone(picked)
+            assert picked is not None
+            self.assertEqual(picked["name"], "GE-Proton11-9.tar.gz")
+
+        with patch("winebox.infrastructure.runner_adapter.platform.machine", return_value="aarch64"):
+            picked_arm = RunnerAdapter._pick_asset(assets, "ge-proton", ".tar.gz")
+            self.assertIsNotNone(picked_arm)
+            assert picked_arm is not None
+            self.assertEqual(picked_arm["name"], "GE-Proton11-9-aarch64.tar.gz")
+
 
 class TestRunnerCLI(unittest.TestCase):
     def setUp(self) -> None:

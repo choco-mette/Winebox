@@ -2,6 +2,7 @@
 
 import json
 import os
+import platform
 import re
 import shutil
 import tarfile
@@ -101,7 +102,7 @@ class RunnerAdapter:
 
     @staticmethod
     def _pick_asset(assets: List[Dict[str, Any]], source_key: str, ext: str) -> Optional[Dict[str, Any]]:
-        """Selects the preferred x86_64/amd64 archive asset from a GitHub release."""
+        """Selects the architecture-appropriate archive asset from a GitHub release."""
         candidates = [
             a for a in assets
             if str(a.get("name", "")).endswith(ext)
@@ -110,13 +111,28 @@ class RunnerAdapter:
         if not candidates:
             return None
 
+        arch = platform.machine().lower()
+        is_arm = arch in ("aarch64", "arm64")
+
+        if is_arm:
+            arm_candidates = [a for a in candidates if "aarch64" in str(a.get("name", "")).lower() or "arm64" in str(a.get("name", "")).lower()]
+            return arm_candidates[0] if arm_candidates else None
+
+        x86_candidates = [
+            a for a in candidates
+            if "aarch64" not in str(a.get("name", "")).lower()
+            and "arm64" not in str(a.get("name", "")).lower()
+        ]
+        if not x86_candidates:
+            return None
+
         if source_key == "wine-builds":
             # Prefer staging-tkg-amd64 or staging-amd64 over wow64/x86 builds
             for preferred in ("staging-tkg-amd64", "staging-amd64", "amd64"):
-                for a in candidates:
+                for a in x86_candidates:
                     if preferred in str(a.get("name", "")).lower():
                         return a
-        return candidates[0]
+        return x86_candidates[0]
 
     @staticmethod
     def download_tarball(url: str, cache_dir: Path, filename: str) -> Path:
