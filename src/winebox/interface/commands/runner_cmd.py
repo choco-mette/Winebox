@@ -111,7 +111,7 @@ def runner_install(
                 raise typer.Exit(code=0)
 
             if not selected_version:
-                releases = svc.fetch_available_releases(selected_source, limit=15)
+                releases = svc.fetch_available_releases(selected_source, limit=30)
                 if not releases:
                     console.print(f"[yellow]No downloadable releases found for '{selected_source}'.[/yellow]")
                     raise typer.Exit(code=1)

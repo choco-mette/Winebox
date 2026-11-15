@@ -57,7 +57,7 @@ class RunnerService:
         share: bool = False,
         xdg_data_home: Optional[Path] = None,
     ) -> Tuple[Runner, Optional[Path]]:
-        releases = self.fetch_available_releases(source_key, limit=20)
+        releases = self.fetch_available_releases(source_key, limit=50)
         if not releases:
             raise WineboxError(f"No downloadable releases found for source '{source_key}'.")
 

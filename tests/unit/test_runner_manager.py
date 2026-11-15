@@ -289,7 +289,7 @@ class TestRunnerCLI(unittest.TestCase):
             )
             res = self.cli.invoke(app, ["runner", "install"], input="1\n1\n")
             self.assertEqual(res.exit_code, 0)
-            mock_fetch.assert_called_once_with("wine-builds", limit=15)
+            mock_fetch.assert_called_once_with("wine-builds", limit=30)
             mock_install.assert_called_once_with("wine-builds", version="9.21", share=False)
 
 
