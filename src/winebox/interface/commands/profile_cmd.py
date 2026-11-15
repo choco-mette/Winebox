@@ -23,6 +23,7 @@ def profile_list() -> None:
     table.add_column("Audio", justify="center")
     table.add_column("Network", justify="center")
     table.add_column("GPU", justify="center")
+    table.add_column("Gamepad", justify="center")
     table.add_column("Type", justify="center")
     table.add_column("Description")
 
@@ -31,8 +32,9 @@ def profile_list() -> None:
         aud = "[green]ON[/green]" if p.audio else "[dim]OFF[/dim]"
         net = "[green]ON[/green]" if p.network else "[dim]OFF[/dim]"
         gpu = "[green]ON[/green]" if p.gpu else "[dim]OFF[/dim]"
+        gp = "[green]ON[/green]" if p.gamepad else "[dim]OFF[/dim]"
         p_type = "[green]Built-in[/green]" if p.is_builtin else "[yellow]Custom[/yellow]"
-        table.add_row(p.id, disp, aud, net, gpu, p_type, p.description)
+        table.add_row(p.id, disp, aud, net, gpu, gp, p_type, p.description)
 
     console.print(table)
 
@@ -53,6 +55,7 @@ def profile_create(
     allow_audio = typer.confirm("Allow Audio (PulseAudio/PipeWire)?", default=True)
     allow_net = typer.confirm("Allow Network / Internet access?", default=False)
     allow_gpu = typer.confirm("Allow 3D GPU acceleration (/dev/dri)?", default=False)
+    allow_gamepad = typer.confirm("Allow Gamepad / Controller input (/dev/input)?", default=False)
 
     svc = ProfileService()
     try:
@@ -63,6 +66,7 @@ def profile_create(
             audio=allow_audio,
             network=allow_net,
             gpu=allow_gpu,
+            gamepad=allow_gamepad,
             description=p_desc,
         )
         console.print(
@@ -95,6 +99,7 @@ def profile_edit(
     new_aud = typer.confirm("Allow Audio?", default=prof.audio)
     new_net = typer.confirm("Allow Network / Internet?", default=prof.network)
     new_gpu = typer.confirm("Allow 3D GPU acceleration?", default=prof.gpu)
+    new_gamepad = typer.confirm("Allow Gamepad / Controller input (/dev/input)?", default=prof.gamepad)
 
     try:
         svc.update_profile(
@@ -104,6 +109,7 @@ def profile_edit(
             audio=new_aud,
             network=new_net,
             gpu=new_gpu,
+            gamepad=new_gamepad,
             description=new_desc,
         )
         console.print(f"[bold green]✓[/bold green] Security Profile '{profile_id}' updated.")

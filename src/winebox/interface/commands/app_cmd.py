@@ -89,6 +89,7 @@ def app_info(
             f"  Audio: {app_obj.policy.audio}\n"
             f"  Network: {app_obj.policy.network}\n"
             f"  GPU: {app_obj.policy.gpu}\n"
+            f"  Gamepad: {app_obj.policy.gamepad}\n"
             f"  Host Mounts: {len(app_obj.policy.host_mounts)}",
             title=f"Application: {app_obj.name}",
         )

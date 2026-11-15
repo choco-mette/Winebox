@@ -44,7 +44,8 @@ DEFAULT_PROFILES = [
         audio=True,
         network=True,
         gpu=True,
-        description="Display, audio, network, and GPU DRI acceleration enabled.",
+        gamepad=True,
+        description="Display, audio, network, GPU DRI, and gamepad input enabled.",
     ),
 ]
 
@@ -58,6 +59,7 @@ SCHEMA_DDL = [
         audio INTEGER NOT NULL DEFAULT 1,
         network INTEGER NOT NULL DEFAULT 1,
         gpu INTEGER NOT NULL DEFAULT 1,
+        gamepad INTEGER NOT NULL DEFAULT 0,
         description TEXT DEFAULT ''
     );
     """,
@@ -123,14 +125,20 @@ def init_database_schema(conn: sqlite3.Connection) -> None:
         conn.execute(ddl)
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION};")
 
+    # Migrate existing v1 databases missing the gamepad column
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(security_profiles)").fetchall()}
+    if "gamepad" not in cols:
+        conn.execute("ALTER TABLE security_profiles ADD COLUMN gamepad INTEGER NOT NULL DEFAULT 0;")
+        conn.execute("UPDATE security_profiles SET gamepad = 1 WHERE id = 'permissive' AND is_builtin = 1;")
+
     cursor = conn.execute("SELECT COUNT(*) FROM security_profiles")
     if cursor.fetchone()[0] == 0:
         for p in DEFAULT_PROFILES:
             conn.execute(
                 """
-                INSERT INTO security_profiles (id, name, is_builtin, display, audio, network, gpu, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                INSERT INTO security_profiles (id, name, is_builtin, display, audio, network, gpu, gamepad, description)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """,
-                (p.id, p.name, int(p.is_builtin), int(p.display), int(p.audio), int(p.network), int(p.gpu), p.description),
+                (p.id, p.name, int(p.is_builtin), int(p.display), int(p.audio), int(p.network), int(p.gpu), int(p.gamepad), p.description),
             )
 

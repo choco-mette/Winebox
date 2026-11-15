@@ -143,6 +143,11 @@ class MountBuilder:
                 if Path(nv_dev).exists():
                     args.extend(["--dev-bind-try", nv_dev, nv_dev])
 
+        # Hardware: Gamepad / Controller input
+        if self.policy.gamepad:
+            if Path("/dev/input").exists():
+                args.extend(["--dev-bind-try", "/dev/input", "/dev/input"])
+
         # Custom Runner directory (ADR-011)
         if self.custom_runner_dir and self.custom_runner_dir.exists():
             sandbox_runner = "/app/runner"

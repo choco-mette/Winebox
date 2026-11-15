@@ -18,6 +18,8 @@ from winebox.security.mount_builder import MountBuilder
 class PrefixService:
     """Manages creation, auditing, and deletion of Wine prefixes."""
 
+    ALLOWED_WINE_TOOLS = ("winecfg", "regedit", "cmd", "taskmgr", "control", "uninstaller")
+
     def __init__(
         self,
         repo: Optional[SqliteRepository] = None,
@@ -157,4 +159,47 @@ class PrefixService:
         PrefixAuditor.sanitize_dosdevices(prefix_inner)
 
         return {"running": True, "killed_pids": killed_pids}
+
+    def run_tool(
+        self,
+        prefix_id: str,
+        tool_name: str,
+        args: Optional[List[str]] = None,
+        inherit_stdio: bool = True,
+    ) -> int:
+        """Executes an allowlisted Wine utility (winecfg, regedit, cmd, etc.) inside the prefix sandbox."""
+        cleaned_tool = tool_name.strip().lower()
+        if cleaned_tool not in self.ALLOWED_WINE_TOOLS:
+            raise WineboxError(
+                f"Unsupported Wine tool '{tool_name}'. Allowed: {', '.join(self.ALLOWED_WINE_TOOLS)}"
+            )
+
+        prefix = self.repo.load_prefix(prefix_id)
+        runner = self.repo.load_runner(prefix.runner_id)
+        p_dir = self.repo.get_prefix_dir(prefix.id)
+        prefix_inner = p_dir / "prefix"
+        home_inner = p_dir / "home"
+
+        policy = SecurityPolicy(display=True, audio=False, network=False, gpu=False, gamepad=False)
+
+        with prefix_lock(p_dir):
+            builder = MountBuilder(
+                prefix_path=prefix_inner,
+                isolated_home_path=home_inner,
+                policy=policy,
+                custom_runner_dir=runner.wine_bin.parent.parent if not runner.is_system else None,
+            )
+            bwrap_args = builder.build_bwrap_args()
+            cmd = WineAdapter.build_run_cmd(cleaned_tool, args=args, runner=runner)
+            try:
+                res = self.bwrap_adapter.execute_in_sandbox(
+                    bwrap_args=bwrap_args,
+                    command_inside=cmd,
+                    inherit_stdio=inherit_stdio,
+                )
+                if res.returncode != 0:
+                    raise WineboxError(f"Wine tool '{cleaned_tool}' exited with code {res.returncode}")
+                return res.returncode
+            finally:
+                PrefixAuditor.sanitize_dosdevices(prefix_inner)
 

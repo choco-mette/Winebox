@@ -236,4 +236,30 @@ def prefix_kill(
         raise typer.Exit(code=1)
 
 
+@prefix_app.command("tool")
+def prefix_tool(
+    prefix_id: Optional[str] = typer.Argument(None, help="Prefix ID to run Wine tool in (interactive if omitted)"),
+    tool: Optional[str] = typer.Argument(None, help="Wine tool: winecfg, regedit, cmd, taskmgr, control, uninstaller"),
+    args: Optional[List[str]] = typer.Argument(None, help="Optional arguments passed to the Wine tool"),
+) -> None:
+    """Run a built-in Wine tool (winecfg, regedit, cmd, etc.) inside the Bubblewrap sandbox."""
+    svc = PrefixService()
+    target_prefix = _select_winetricks_prefix(svc, prefix_id)
+
+    target_tool = tool
+    if not target_tool:
+        tool_options = [(t, t) for t in PrefixService.ALLOWED_WINE_TOOLS]
+        target_tool = tui_select(f"Select Wine Tool for '{target_prefix}'", tool_options, default_index=0)
+        if not target_tool:
+            raise typer.Exit(code=0)
+
+    console.print(f"\n[bold cyan]Launching '{target_tool}' inside sandbox for prefix '{target_prefix}'...[/bold cyan]")
+    try:
+        svc.run_tool(prefix_id=target_prefix, tool_name=target_tool, args=args, inherit_stdio=True)
+        console.print(f"[bold green]✓[/bold green] Wine tool '{target_tool}' exited cleanly.")
+    except WineboxError as e:
+        console.print(f"[bold red]Tool Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+
 
