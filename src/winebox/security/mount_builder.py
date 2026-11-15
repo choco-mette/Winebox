@@ -133,6 +133,8 @@ class MountBuilder:
                 args.extend([
                     "--ro-bind-try", str(pipewire_socket), f"{runtime_dir}/pipewire-0",
                 ])
+            if not self.policy.mic:
+                args.extend(["--setenv", "PULSE_SOURCE", "null"])
 
         # Hardware: GPU (ADR-013)
         if self.policy.gpu:
@@ -147,6 +149,11 @@ class MountBuilder:
         if self.policy.gamepad:
             if Path("/dev/input").exists():
                 args.extend(["--dev-bind-try", "/dev/input", "/dev/input"])
+
+        # Hardware: Raw HID devices (e.g. DualSense gyro/haptics, racing wheels)
+        if self.policy.hidraw:
+            for hid_dev in sorted(Path("/dev").glob("hidraw*")):
+                args.extend(["--dev-bind-try", str(hid_dev), str(hid_dev)])
 
         # Custom Runner directory (ADR-011)
         if self.custom_runner_dir and self.custom_runner_dir.exists():

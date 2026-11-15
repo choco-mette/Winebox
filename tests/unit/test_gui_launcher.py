@@ -83,12 +83,21 @@ class TestGuiCliAndApp(unittest.TestCase):
         except (ImportError, ValueError):
             self.skipTest("GTK4 / Libadwaita not available")
 
+        from gi.repository import Gio
         from winebox.interface.gui.app import WineboxGuiApp
 
         with tempfile.TemporaryDirectory() as tmp:
             repo = SqliteRepository(data_root=Path(tmp) / "data", config_root=Path(tmp) / "cfg")
             gui_app = WineboxGuiApp(services=ServiceContainer(repo=repo))
+            gui_app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
             self.assertEqual(gui_app.get_application_id(), "id.winebox.WineBox")
+            gui_app.register(None)
+            gui_app.activate()
+            win = gui_app._window
+            assert win is not None
+            for page in win.pages.values():
+                page.refresh()
+            win.close()
 
 
 if __name__ == "__main__":

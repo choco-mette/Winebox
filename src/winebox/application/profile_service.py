@@ -27,6 +27,8 @@ class ProfileService:
         network: bool = True,
         gpu: bool = True,
         gamepad: bool = False,
+        hidraw: bool = False,
+        mic: bool = False,
         description: str = "",
     ) -> SecurityProfile:
         cleaned_id = profile_id.strip().lower().replace(" ", "-")
@@ -47,6 +49,8 @@ class ProfileService:
             network=network,
             gpu=gpu,
             gamepad=gamepad,
+            hidraw=hidraw,
+            mic=mic,
             description=description,
         )
         self.repo.save_profile(profile)
@@ -61,6 +65,8 @@ class ProfileService:
         network: Optional[bool] = None,
         gpu: Optional[bool] = None,
         gamepad: Optional[bool] = None,
+        hidraw: Optional[bool] = None,
+        mic: Optional[bool] = None,
         description: Optional[str] = None,
     ) -> SecurityProfile:
         profile = self.repo.load_profile(profile_id)
@@ -77,6 +83,10 @@ class ProfileService:
             profile.gpu = gpu
         if gamepad is not None:
             profile.gamepad = gamepad
+        if hidraw is not None:
+            profile.hidraw = hidraw
+        if mic is not None:
+            profile.mic = mic
         if description is not None:
             profile.description = description
 

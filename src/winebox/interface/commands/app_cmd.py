@@ -90,6 +90,8 @@ def app_info(
             f"  Network: {app_obj.policy.network}\n"
             f"  GPU: {app_obj.policy.gpu}\n"
             f"  Gamepad: {app_obj.policy.gamepad}\n"
+            f"  HIDRaw: {app_obj.policy.hidraw}\n"
+            f"  Mic: {app_obj.policy.mic}\n"
             f"  Host Mounts: {len(app_obj.policy.host_mounts)}",
             title=f"Application: {app_obj.name}",
         )

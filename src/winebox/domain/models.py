@@ -46,6 +46,8 @@ class SecurityProfile:
     network: bool = True
     gpu: bool = True
     gamepad: bool = False
+    hidraw: bool = False
+    mic: bool = False
     description: str = ""
 
     def to_policy(self, host_mounts: Optional[List[HostMount]] = None, env_vars: Optional[Dict[str, str]] = None) -> "SecurityPolicy":
@@ -55,6 +57,8 @@ class SecurityProfile:
             network=self.network,
             gpu=self.gpu,
             gamepad=self.gamepad,
+            hidraw=self.hidraw,
+            mic=self.mic,
             host_mounts=host_mounts or [],
             env_vars=env_vars or {},
         )
@@ -67,6 +71,8 @@ class SecurityPolicy:
     network: bool = True
     gpu: bool = True
     gamepad: bool = False
+    hidraw: bool = False
+    mic: bool = False
     host_mounts: List[HostMount] = field(default_factory=list)
     env_vars: Dict[str, str] = field(default_factory=dict)
 

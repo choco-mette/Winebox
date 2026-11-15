@@ -24,6 +24,8 @@ def profile_list() -> None:
     table.add_column("Network", justify="center")
     table.add_column("GPU", justify="center")
     table.add_column("Gamepad", justify="center")
+    table.add_column("HIDRaw", justify="center")
+    table.add_column("Mic", justify="center")
     table.add_column("Type", justify="center")
     table.add_column("Description")
 
@@ -33,8 +35,10 @@ def profile_list() -> None:
         net = "[green]ON[/green]" if p.network else "[dim]OFF[/dim]"
         gpu = "[green]ON[/green]" if p.gpu else "[dim]OFF[/dim]"
         gp = "[green]ON[/green]" if p.gamepad else "[dim]OFF[/dim]"
+        hid = "[green]ON[/green]" if p.hidraw else "[dim]OFF[/dim]"
+        mic = "[green]ON[/green]" if p.mic else "[dim]OFF[/dim]"
         p_type = "[green]Built-in[/green]" if p.is_builtin else "[yellow]Custom[/yellow]"
-        table.add_row(p.id, disp, aud, net, gpu, gp, p_type, p.description)
+        table.add_row(p.id, disp, aud, net, gpu, gp, hid, mic, p_type, p.description)
 
     console.print(table)
 
@@ -56,6 +60,8 @@ def profile_create(
     allow_net = typer.confirm("Allow Network / Internet access?", default=False)
     allow_gpu = typer.confirm("Allow 3D GPU acceleration (/dev/dri)?", default=False)
     allow_gamepad = typer.confirm("Allow Gamepad / Controller input (/dev/input)?", default=False)
+    allow_hidraw = typer.confirm("Allow Raw HID devices (/dev/hidraw*)?", default=False)
+    allow_mic = typer.confirm("Allow Microphone audio input?", default=False)
 
     svc = ProfileService()
     try:
@@ -67,6 +73,8 @@ def profile_create(
             network=allow_net,
             gpu=allow_gpu,
             gamepad=allow_gamepad,
+            hidraw=allow_hidraw,
+            mic=allow_mic,
             description=p_desc,
         )
         console.print(
@@ -100,6 +108,8 @@ def profile_edit(
     new_net = typer.confirm("Allow Network / Internet?", default=prof.network)
     new_gpu = typer.confirm("Allow 3D GPU acceleration?", default=prof.gpu)
     new_gamepad = typer.confirm("Allow Gamepad / Controller input (/dev/input)?", default=prof.gamepad)
+    new_hidraw = typer.confirm("Allow Raw HID devices (/dev/hidraw*)?", default=prof.hidraw)
+    new_mic = typer.confirm("Allow Microphone audio input?", default=prof.mic)
 
     try:
         svc.update_profile(
@@ -110,6 +120,8 @@ def profile_edit(
             network=new_net,
             gpu=new_gpu,
             gamepad=new_gamepad,
+            hidraw=new_hidraw,
+            mic=new_mic,
             description=new_desc,
         )
         console.print(f"[bold green]✓[/bold green] Security Profile '{profile_id}' updated.")

@@ -39,20 +39,44 @@ class TestGamepadPolicy(unittest.TestCase):
         paranoid = svc.get_profile("paranoid")
 
         self.assertTrue(permissive.gamepad)
+        self.assertFalse(permissive.hidraw)
+        self.assertFalse(permissive.mic)
         self.assertFalse(balanced.gamepad)
         self.assertFalse(zero_trust.gamepad)
         self.assertFalse(paranoid.gamepad)
         self.assertTrue(permissive.to_policy().gamepad)
 
-    def test_profile_service_create_and_update_gamepad(self) -> None:
+    def test_profile_service_create_and_update_gamepad_hidraw_mic(self) -> None:
         svc = ProfileService(repo=self.repo)
-        prof = svc.create_profile("arcade", "Arcade", gamepad=True)
+        prof = svc.create_profile("arcade", "Arcade", gamepad=True, hidraw=True, mic=True)
         self.assertTrue(prof.gamepad)
-        self.assertTrue(svc.get_profile("arcade").gamepad)
+        self.assertTrue(prof.hidraw)
+        self.assertTrue(prof.mic)
+        loaded = svc.get_profile("arcade")
+        self.assertTrue(loaded.hidraw)
+        self.assertTrue(loaded.mic)
 
-        updated = svc.update_profile("arcade", gamepad=False)
+        updated = svc.update_profile("arcade", gamepad=False, hidraw=False, mic=False)
         self.assertFalse(updated.gamepad)
-        self.assertFalse(svc.get_profile("arcade").gamepad)
+        self.assertFalse(updated.hidraw)
+        self.assertFalse(updated.mic)
+
+    def test_mount_builder_mic_and_hidraw_policies(self) -> None:
+        pfx = self.tmp_path / "pfx"
+        home = self.tmp_path / "home"
+        pfx.mkdir()
+        home.mkdir()
+
+        args_mic_off = MountBuilder(pfx, home, SecurityPolicy(display=False, audio=True, mic=False, gpu=False)).build_bwrap_args()
+        args_mic_on = MountBuilder(pfx, home, SecurityPolicy(display=False, audio=True, mic=True, gpu=False)).build_bwrap_args()
+        self.assertIn("PULSE_SOURCE", args_mic_off)
+        self.assertNotIn("PULSE_SOURCE", args_mic_on)
+
+        with patch("winebox.security.mount_builder.Path.glob", return_value=[Path("/dev/hidraw0")]):
+            args_hid_on = MountBuilder(pfx, home, SecurityPolicy(display=False, audio=False, gpu=False, hidraw=True)).build_bwrap_args()
+            args_hid_off = MountBuilder(pfx, home, SecurityPolicy(display=False, audio=False, gpu=False, hidraw=False)).build_bwrap_args()
+        self.assertIn("/dev/hidraw0", args_hid_on)
+        self.assertNotIn("/dev/hidraw0", args_hid_off)
 
     def test_sqlite_migration_adds_gamepad_column(self) -> None:
         db_file = self.tmp_path / "legacy.db"
@@ -144,10 +168,17 @@ class TestGamepadAndToolCLI(unittest.TestCase):
         self.assertIn("winecfg", res_tool.output)
 
         with tempfile.TemporaryDirectory() as tmp:
-            env = {"XDG_DATA_HOME": str(Path(tmp) / "data"), "XDG_CONFIG_HOME": str(Path(tmp) / "cfg"), "PATH": "/usr/bin:/bin"}
+            env = {
+                "XDG_DATA_HOME": str(Path(tmp) / "data"),
+                "XDG_CONFIG_HOME": str(Path(tmp) / "cfg"),
+                "PATH": "/usr/bin:/bin",
+                "COLUMNS": "160",
+            }
             res_prof = self.cli.invoke(app, ["profile", "list"], env=env)
             self.assertEqual(res_prof.exit_code, 0)
             self.assertIn("Gamepad", res_prof.output)
+            self.assertIn("HIDRaw", res_prof.output)
+            self.assertIn("Mic", res_prof.output)
 
 
 if __name__ == "__main__":

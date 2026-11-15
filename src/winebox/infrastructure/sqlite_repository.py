@@ -68,14 +68,18 @@ class SqliteRepository:
         with self.get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO security_profiles (id, name, is_builtin, display, audio, network, gpu, gamepad, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO security_profiles (id, name, is_builtin, display, audio, network, gpu, gamepad, hidraw, mic, description)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name, display = excluded.display, audio = excluded.audio,
                     network = excluded.network, gpu = excluded.gpu, gamepad = excluded.gamepad,
-                    description = excluded.description;
+                    hidraw = excluded.hidraw, mic = excluded.mic, description = excluded.description;
                 """,
-                (profile.id, profile.name, int(profile.is_builtin), int(profile.display), int(profile.audio), int(profile.network), int(profile.gpu), int(profile.gamepad), profile.description),
+                (
+                    profile.id, profile.name, int(profile.is_builtin), int(profile.display),
+                    int(profile.audio), int(profile.network), int(profile.gpu),
+                    int(profile.gamepad), int(profile.hidraw), int(profile.mic), profile.description,
+                ),
             )
 
     @staticmethod
@@ -84,7 +88,7 @@ class SqliteRepository:
             id=row["id"], name=row["name"], is_builtin=bool(row["is_builtin"]),
             display=bool(row["display"]), audio=bool(row["audio"]),
             network=bool(row["network"]), gpu=bool(row["gpu"]),
-            gamepad=bool(row["gamepad"]),
+            gamepad=bool(row["gamepad"]), hidraw=bool(row["hidraw"]), mic=bool(row["mic"]),
             description=row["description"] or "",
         )
 

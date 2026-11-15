@@ -63,6 +63,8 @@ class LibraryPage(Gtk.Box):
                     ("Net", app_obj.policy.network),
                     ("GPU", app_obj.policy.gpu),
                     ("Gamepad", app_obj.policy.gamepad),
+                    ("HIDRaw", app_obj.policy.hidraw),
+                    ("Mic", app_obj.policy.mic),
                 )
                 if enabled
             ]
