@@ -56,6 +56,7 @@ class DesktopService:
             name=app.name,
             icon=chosen_icon,
             categories=chosen_categories,
+            prefix_id=app.prefix_id,
             apps_dir=self.apps_dir,
         )
 

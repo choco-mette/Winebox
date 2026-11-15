@@ -2,7 +2,9 @@
 
 import fcntl
 import os
+import signal
 import subprocess
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Generator, List, Optional
@@ -43,6 +45,41 @@ class PrefixLock:
             finally:
                 self._fd = None
 
+    @classmethod
+    def is_locked(cls, prefix_root: Path) -> bool:
+        """Check if prefix.lock is currently locked by any running process."""
+        lock_file = prefix_root / "prefix.lock"
+        if not lock_file.exists():
+            return False
+        fd: Optional[int] = None
+        try:
+            fd = os.open(str(lock_file), os.O_RDWR)
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            return False
+        except (BlockingIOError, OSError):
+            return True
+        finally:
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+
+    @classmethod
+    def read_locked_pid(cls, prefix_root: Path) -> Optional[int]:
+        """Read the PID recorded inside prefix.lock, if any."""
+        lock_file = prefix_root / "prefix.lock"
+        if not lock_file.exists():
+            return None
+        try:
+            text = lock_file.read_text(encoding="utf-8").strip()
+            if text:
+                return int(text.splitlines()[0].strip())
+        except Exception:
+            pass
+        return None
+
 
 @contextmanager
 def prefix_lock(prefix_root: Path) -> Generator[PrefixLock, None, None]:
@@ -56,7 +93,7 @@ def prefix_lock(prefix_root: Path) -> Generator[PrefixLock, None, None]:
 
 
 class ProcessManager:
-    """Supervises and executes subprocesses."""
+    """Supervises, queries, and terminates processes."""
 
     @staticmethod
     def run_process(
@@ -82,3 +119,98 @@ class ProcessManager:
         except Exception as e:
             raise ExecutionError(f"Failed to execute process: {e}") from e
 
+    @staticmethod
+    def is_pid_alive(pid: int) -> bool:
+        """Check if a process with the given PID is currently alive on the host."""
+        if pid <= 0:
+            return False
+        try:
+            # First try waitpid non-blocking in case it's a child of current process
+            try:
+                wpid, _ = os.waitpid(pid, os.WNOHANG)
+                if wpid == pid:
+                    return False
+            except (ChildProcessError, OSError):
+                pass
+
+            os.kill(pid, 0)
+
+            # Check if it is a zombie in /proc
+            status_file = Path(f"/proc/{pid}/status")
+            if status_file.exists():
+                for line in status_file.read_text(errors="ignore").splitlines():
+                    if line.startswith("State:"):
+                        if "Z" in line:  # Zombie
+                            return False
+                        break
+
+            return True
+        except OSError:
+            return False
+
+    @classmethod
+    def kill_pid(cls, pid: int, timeout: float = 1.0, force: bool = False) -> bool:
+        """Terminate a process, trying SIGTERM first (unless force=True) then SIGKILL."""
+        if not cls.is_pid_alive(pid):
+            return True
+
+        if not force:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except OSError:
+                return True
+
+            deadline = time.time() + timeout
+            while time.time() < deadline:
+                if not cls.is_pid_alive(pid):
+                    return True
+                time.sleep(0.05)
+
+        # Force kill
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            return True
+
+        deadline = time.time() + 1.0
+        while time.time() < deadline:
+            if not cls.is_pid_alive(pid):
+                return True
+            time.sleep(0.05)
+
+        return not cls.is_pid_alive(pid)
+
+    @classmethod
+    def find_processes_by_prefix(cls, prefix_path: Path) -> List[int]:
+        """Find any processes on host whose commandline references the prefix path."""
+        prefix_str = str(prefix_path.resolve())
+        pids: List[int] = []
+        my_pid = os.getpid()
+
+        proc_dir = Path("/proc")
+        if not proc_dir.exists():
+            return pids
+
+        try:
+            entries = list(proc_dir.iterdir())
+        except OSError:
+            return pids
+
+        for entry in entries:
+            if not entry.is_dir() or not entry.name.isdigit():
+                continue
+            pid = int(entry.name)
+            if pid == my_pid:
+                continue
+
+            try:
+                cmdline_file = entry / "cmdline"
+                if not cmdline_file.exists():
+                    continue
+                content = cmdline_file.read_bytes().replace(b"\x00", b" ").decode("utf-8", errors="ignore")
+                if prefix_str in content:
+                    pids.append(pid)
+            except Exception:
+                continue
+
+        return pids

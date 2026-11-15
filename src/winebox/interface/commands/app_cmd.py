@@ -158,3 +158,26 @@ def app_desktop(
     except WineboxError as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(code=1)
+
+
+@app_app.command("kill")
+def app_kill(
+    app_id: str = typer.Argument(..., help="Application ID to terminate"),
+    force: bool = typer.Option(False, "--force", "-f", help="Force immediate SIGKILL without SIGTERM grace period"),
+) -> None:
+    """Terminate all running processes in the application's prefix (ADR-025)."""
+    svc = AppService()
+    try:
+        res = svc.kill_app(app_id, force=force)
+        if not res["running"]:
+            console.print(f"[yellow]Application '{app_id}' is not running. Prefix is idle.[/yellow]")
+        else:
+            pids_str = ", ".join(str(p) for p in res["killed_pids"]) or "none"
+            console.print(
+                f"[bold green]✓[/bold green] Terminated processes for application '[bold cyan]{app_id}[/bold cyan]' "
+                f"([dim]PIDs: {pids_str}[/dim])."
+            )
+    except WineboxError as e:
+        console.print(f"[bold red]Kill Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
+

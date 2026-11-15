@@ -211,3 +211,26 @@ def prefix_winetricks(
         raise typer.Exit(code=1)
 
 
+@prefix_app.command("kill")
+def prefix_kill(
+    prefix_id: str = typer.Argument(..., help="Prefix ID to terminate processes for"),
+    force: bool = typer.Option(False, "--force", "-f", help="Force immediate SIGKILL without SIGTERM grace period"),
+) -> None:
+    """Terminate all running processes (Wine, bwrap, wineserver) in a prefix (ADR-025)."""
+    svc = PrefixService()
+    try:
+        res = svc.kill_prefix(prefix_id, force=force)
+        if not res["running"]:
+            console.print(f"[yellow]Prefix '{prefix_id}' is not running. Prefix is idle.[/yellow]")
+        else:
+            pids_str = ", ".join(str(p) for p in res["killed_pids"]) or "none"
+            console.print(
+                f"[bold green]✓[/bold green] Terminated processes for prefix '[bold cyan]{prefix_id}[/bold cyan]' "
+                f"([dim]PIDs: {pids_str}[/dim])."
+            )
+    except WineboxError as e:
+        console.print(f"[bold red]Kill Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+
+

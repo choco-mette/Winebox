@@ -1,6 +1,6 @@
 """Application registration and metadata management service."""
 
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 from winebox.application.desktop_service import DesktopService
 from winebox.domain.models import Application, SecurityPolicy
 from winebox.infrastructure.sqlite_repository import SqliteRepository
@@ -48,4 +48,10 @@ class AppService:
         except Exception:
             pass
         self.repo.delete_app(app_id)
+
+    def kill_app(self, app_id: str, force: bool = False) -> Dict[str, Any]:
+        """Terminate all running processes in the application's prefix (ADR-025)."""
+        app = self.get_app(app_id)
+        from winebox.application.prefix_service import PrefixService
+        return PrefixService(self.repo).kill_prefix(app.prefix_id, force=force)
 

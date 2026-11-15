@@ -1,4 +1,4 @@
-"""XDG Desktop Entry adapter for managing Freedesktop .desktop files (ADR-024)."""
+"""XDG Desktop Entry adapter for managing Freedesktop .desktop files (ADR-024 & ADR-025)."""
 
 import os
 from pathlib import Path
@@ -32,9 +32,11 @@ class DesktopAdapter:
         icon: str = "wine",
         categories: str = "Game;Utility;",
         comment: Optional[str] = None,
+        prefix_id: Optional[str] = None,
     ) -> str:
         """Generate valid INI content for the .desktop entry."""
         desc = comment or f"Run {name} in Winebox sandbox"
+        kill_cmd = f"winebox prefix kill {prefix_id}" if prefix_id else f"winebox app kill {app_id}"
         lines = [
             "[Desktop Entry]",
             "Type=Application",
@@ -45,11 +47,15 @@ class DesktopAdapter:
             f"Categories={categories}",
             "StartupNotify=true",
             f"Comment={desc}",
-            "Actions=Configure;",
+            "Actions=Configure;Kill;",
             "",
             "[Desktop Action Configure]",
             "Name=WineBox App Info",
             f"Exec=winebox app info {app_id}",
+            "",
+            "[Desktop Action Kill]",
+            "Name=Stop / Kill Process",
+            f"Exec={kill_cmd}",
             "",
         ]
         return "\n".join(lines)
@@ -62,6 +68,7 @@ class DesktopAdapter:
         icon: str = "wine",
         categories: str = "Game;Utility;",
         comment: Optional[str] = None,
+        prefix_id: Optional[str] = None,
         apps_dir: Optional[Path] = None,
     ) -> Path:
         """Write the .desktop entry file into the applications directory."""
@@ -73,6 +80,7 @@ class DesktopAdapter:
             icon=icon,
             categories=categories,
             comment=comment,
+            prefix_id=prefix_id,
         )
         dest_path.write_text(content, encoding="utf-8")
         dest_path.chmod(0o755)
