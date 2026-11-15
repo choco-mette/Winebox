@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import List, Optional
 from winebox.common.exceptions import WineboxError
 from winebox.domain.models import HostMount, MountMode, SecurityPolicy
 from winebox.infrastructure.bwrap_adapter import BwrapAdapter
@@ -18,7 +18,7 @@ class WinetricksService:
 
     def __init__(
         self,
-        repo: Optional[Any] = None,
+        repo: Optional[SqliteRepository] = None,
         bwrap_adapter: Optional[BwrapAdapter] = None,
         adapter: Optional[WinetricksAdapter] = None,
     ) -> None:
@@ -75,14 +75,15 @@ class WinetricksService:
                 unattended=unattended,
             )
 
-            res = self.bwrap_adapter.execute_in_sandbox(
-                bwrap_args=bwrap_args,
-                command_inside=winetricks_cmd,
-                inherit_stdio=inherit_stdio,
-            )
+            try:
+                res = self.bwrap_adapter.execute_in_sandbox(
+                    bwrap_args=bwrap_args,
+                    command_inside=winetricks_cmd,
+                    inherit_stdio=inherit_stdio,
+                )
 
-            # Auto-sanitize prefix after winetricks finishes
-            PrefixAuditor.sanitize_dosdevices(prefix_inner)
-
-            if res.returncode != 0:
-                raise WineboxError(f"Winetricks execution failed with exit code {res.returncode}")
+                if res.returncode != 0:
+                    raise WineboxError(f"Winetricks execution failed with exit code {res.returncode}")
+            finally:
+                # Auto-sanitize prefix after winetricks finishes
+                PrefixAuditor.sanitize_dosdevices(prefix_inner)

@@ -22,6 +22,18 @@ class PolicyValidator:
         Path("/mnt"),
     }
 
+    # Critical sandbox paths that must NEVER be shadowed by custom host mounts
+    RESTRICTED_SANDBOX_PREFIXES: Set[Path] = {
+        Path("/proc"),
+        Path("/dev"),
+        Path("/sys"),
+        Path("/app/runner"),
+        Path("/usr"),
+        Path("/lib"),
+        Path("/lib64"),
+        Path("/bin"),
+    }
+
     # Sensitive directories in user HOME that must never be exposed
     SENSITIVE_HOME_NAMES: Set[str] = {
         ".ssh",
@@ -69,6 +81,25 @@ class PolicyValidator:
                 raise PolicyValidationError(
                     f"Mounting system directory '{restricted}' directly is strictly prohibited"
                 )
+
+        # Validate sandbox mount destination lexically (do not resolve host symlinks)
+        raw_sandbox_path = Path(mount.sandbox_path)
+        if not raw_sandbox_path.is_absolute():
+            raise PolicyValidationError(
+                f"Sandbox mount path '{mount.sandbox_path}' must be an absolute path"
+            )
+        norm_sandbox = os.path.normpath(str(raw_sandbox_path))
+        if norm_sandbox.startswith("//"):
+            norm_sandbox = "/" + norm_sandbox.lstrip("/")
+        sandbox_path = Path(norm_sandbox)
+
+        if sandbox_path == Path("/") or any(
+            sandbox_path == restricted or sandbox_path.is_relative_to(restricted)
+            for restricted in self.RESTRICTED_SANDBOX_PREFIXES
+        ):
+            raise PolicyValidationError(
+                f"Mounting over critical sandbox path '{mount.sandbox_path}' is strictly prohibited"
+            )
 
         if not host_path.exists():
             raise PolicyValidationError(f"Host path does not exist: {host_path}")

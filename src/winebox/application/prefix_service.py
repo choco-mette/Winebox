@@ -18,7 +18,7 @@ class PrefixService:
 
     def __init__(
         self,
-        repo: Optional[Any] = None,
+        repo: Optional[SqliteRepository] = None,
         bwrap_adapter: Optional[BwrapAdapter] = None,
     ) -> None:
         self.repo = repo or SqliteRepository()

@@ -1,7 +1,7 @@
 """Lutris integration service for exporting WineBox apps to Lutris GUI."""
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 from winebox.infrastructure.lutris_adapter import LutrisAdapter
 from winebox.infrastructure.sqlite_repository import SqliteRepository
 
@@ -11,7 +11,7 @@ class LutrisService:
 
     def __init__(
         self,
-        repo: Optional[Any] = None,
+        repo: Optional[SqliteRepository] = None,
         adapter: Optional[LutrisAdapter] = None,
     ) -> None:
         self.repo = repo or SqliteRepository()

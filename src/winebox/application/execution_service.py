@@ -3,7 +3,7 @@
 import os
 import subprocess
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import List, Optional
 from winebox.common.exceptions import ResourceNotFoundError
 from winebox.domain.models import Application
 from winebox.infrastructure.bwrap_adapter import BwrapAdapter
@@ -21,7 +21,7 @@ class ExecutionService:
 
     def __init__(
         self,
-        repo: Optional[Any] = None,
+        repo: Optional[SqliteRepository] = None,
         bwrap_adapter: Optional[BwrapAdapter] = None,
         validator: Optional[PolicyValidator] = None,
     ) -> None:
@@ -82,26 +82,29 @@ class ExecutionService:
                 runner=runner,
             )
 
-            res = self.bwrap_adapter.execute_in_sandbox(
-                bwrap_args=bwrap_args,
-                command_inside=cmd_inside,
-                inherit_stdio=inherit_stdio,
-            )
+            try:
+                res = self.bwrap_adapter.execute_in_sandbox(
+                    bwrap_args=bwrap_args,
+                    command_inside=cmd_inside,
+                    inherit_stdio=inherit_stdio,
+                )
 
-            # Update telemetry in database
-            if hasattr(self.repo, "update_app_last_run"):
-                self.repo.update_app_last_run(app_id=app.id, exit_code=res.returncode)
+                # Update telemetry in database
+                if hasattr(self.repo, "update_app_last_run"):
+                    self.repo.update_app_last_run(app_id=app.id, exit_code=res.returncode)
 
-            # Log execution details to rotating log file
-            stdout_str = res.stdout if hasattr(res, "stdout") and res.stdout else ""
-            stderr_str = res.stderr if hasattr(res, "stderr") and res.stderr else ""
-            self.log_manager.log_execution(
-                prefix_id=prefix.id,
-                app_id=app.id,
-                stdout=stdout_str,
-                stderr=stderr_str,
-                exit_code=res.returncode,
-            )
+                # Log execution details to rotating log file
+                stdout_str = res.stdout if hasattr(res, "stdout") and res.stdout else ""
+                stderr_str = res.stderr if hasattr(res, "stderr") and res.stderr else ""
+                self.log_manager.log_execution(
+                    prefix_id=prefix.id,
+                    app_id=app.id,
+                    stdout=stdout_str,
+                    stderr=stderr_str,
+                    exit_code=res.returncode,
+                )
 
-            return res
+                return res
+            finally:
+                PrefixAuditor.sanitize_dosdevices(prefix_inner)
 

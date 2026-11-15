@@ -139,7 +139,7 @@ class MountBuilder:
             if Path("/dev/dri").exists():
                 args.extend(["--dev-bind-try", "/dev/dri", "/dev/dri"])
             # NVIDIA devices
-            for nv_dev in ["/dev/nvidiactl", "/dev/nvidia0", "/dev/nvidia-modeset"]:
+            for nv_dev in ["/dev/nvidiactl", "/dev/nvidia0", "/dev/nvidia-modeset", "/dev/nvidia-uvm"]:
                 if Path(nv_dev).exists():
                     args.extend(["--dev-bind-try", nv_dev, nv_dev])
 

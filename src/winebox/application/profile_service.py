@@ -1,7 +1,7 @@
 """Application service for managing Security Profiles."""
 
 from typing import List, Optional
-from winebox.common.exceptions import WineboxError
+from winebox.common.exceptions import ResourceNotFoundError, WineboxError
 from winebox.domain.models import SecurityProfile
 from winebox.infrastructure.sqlite_repository import SqliteRepository
 
@@ -32,9 +32,10 @@ class ProfileService:
         # Check if exists
         try:
             self.repo.load_profile(cleaned_id)
-            raise WineboxError(f"Security Profile '{cleaned_id}' already exists")
-        except Exception:
+        except ResourceNotFoundError:
             pass
+        else:
+            raise WineboxError(f"Security Profile '{cleaned_id}' already exists")
 
         profile = SecurityProfile(
             id=cleaned_id,

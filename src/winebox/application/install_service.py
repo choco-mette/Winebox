@@ -1,7 +1,7 @@
 """Installation service for executing Windows installers in sandbox."""
 
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import List, Optional
 from winebox.common.exceptions import WineboxError
 from winebox.domain.models import HostMount, MountMode, SecurityPolicy
 from winebox.infrastructure.bwrap_adapter import BwrapAdapter
@@ -17,7 +17,7 @@ class InstallService:
 
     def __init__(
         self,
-        repo: Optional[Any] = None,
+        repo: Optional[SqliteRepository] = None,
         bwrap_adapter: Optional[BwrapAdapter] = None,
     ) -> None:
         self.repo = repo or SqliteRepository()
@@ -86,14 +86,15 @@ class InstallService:
                 runner=runner,
             )
 
-            self.bwrap_adapter.execute_in_sandbox(
-                bwrap_args=bwrap_args,
-                command_inside=installer_cmd,
-                inherit_stdio=True,
-            )
-
-            # Sanitize prefix after installer completes
-            PrefixAuditor.sanitize_dosdevices(prefix_inner)
+            try:
+                self.bwrap_adapter.execute_in_sandbox(
+                    bwrap_args=bwrap_args,
+                    command_inside=installer_cmd,
+                    inherit_stdio=True,
+                )
+            finally:
+                # Sanitize prefix after installer completes
+                PrefixAuditor.sanitize_dosdevices(prefix_inner)
 
             # Find newly installed executables
             return self.scan_for_executables(prefix_inner)

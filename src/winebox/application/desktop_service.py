@@ -1,7 +1,8 @@
 """Application service for XDG Desktop Entry creation and lifecycle management (ADR-024)."""
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
+from winebox.common.exceptions import WineboxError
 from winebox.infrastructure.desktop_adapter import DesktopAdapter
 from winebox.infrastructure.sqlite_repository import SqliteRepository
 
@@ -9,7 +10,7 @@ from winebox.infrastructure.sqlite_repository import SqliteRepository
 class DesktopService:
     """Orchestrates creation, inspection, and deletion of XDG .desktop entries."""
 
-    def __init__(self, repo: Optional[Any] = None, apps_dir: Optional[Path] = None) -> None:
+    def __init__(self, repo: Optional[SqliteRepository] = None, apps_dir: Optional[Path] = None) -> None:
         self.repo = repo or SqliteRepository()
         self.apps_dir = apps_dir
 
@@ -43,7 +44,7 @@ class DesktopService:
                     if candidate_path.exists():
                         chosen_icon = str(candidate_path.resolve())
                         break
-            except Exception:
+            except (OSError, WineboxError):
                 pass
 
         if not chosen_icon:

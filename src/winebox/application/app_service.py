@@ -2,6 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 from winebox.application.desktop_service import DesktopService
+from winebox.common.exceptions import WineboxError
 from winebox.domain.models import Application, SecurityPolicy
 from winebox.infrastructure.sqlite_repository import SqliteRepository
 
@@ -9,7 +10,7 @@ from winebox.infrastructure.sqlite_repository import SqliteRepository
 class AppService:
     """Manages application registration, inspection, and removal."""
 
-    def __init__(self, repo: Optional[Any] = None) -> None:
+    def __init__(self, repo: Optional[SqliteRepository] = None) -> None:
         self.repo = repo or SqliteRepository()
 
     def list_apps(self) -> List[Application]:
@@ -45,7 +46,7 @@ class AppService:
     def remove_app(self, app_id: str) -> None:
         try:
             DesktopService(self.repo).remove_desktop_entry(app_id)
-        except Exception:
+        except (OSError, WineboxError):
             pass
         self.repo.delete_app(app_id)
 

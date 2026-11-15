@@ -76,7 +76,7 @@ class PrefixLock:
             text = lock_file.read_text(encoding="utf-8").strip()
             if text:
                 return int(text.splitlines()[0].strip())
-        except Exception:
+        except (OSError, ValueError):
             pass
         return None
 
@@ -210,7 +210,7 @@ class ProcessManager:
                 content = cmdline_file.read_bytes().replace(b"\x00", b" ").decode("utf-8", errors="ignore")
                 if prefix_str in content:
                     pids.append(pid)
-            except Exception:
+            except (OSError, UnicodeDecodeError):
                 continue
 
         return pids

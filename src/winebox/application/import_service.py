@@ -2,18 +2,19 @@
 
 import uuid
 from pathlib import Path
-from typing import Any, List, Optional, Tuple
+from typing import List, Optional, Tuple
 from winebox.common.exceptions import PrefixAuditError, WineboxError
 from winebox.domain.models import Application, Prefix, PrefixOrigin, PrefixStatus, SecurityPolicy
 from winebox.infrastructure.sqlite_repository import SqliteRepository
 from winebox.infrastructure.fs_adapter import FilesystemAdapter
+from winebox.infrastructure.process_manager import prefix_lock
 from winebox.security.auditor import PrefixAuditor
 
 
 class ImportService:
     """Manages cloning, sanitizing, and importing portable apps and external prefixes."""
 
-    def __init__(self, repo: Optional[Any] = None) -> None:
+    def __init__(self, repo: Optional[SqliteRepository] = None) -> None:
         self.repo = repo or SqliteRepository()
 
     def scan_portable_executables(self, source_dir: Path) -> List[str]:
@@ -60,39 +61,40 @@ class ImportService:
             raise WineboxError(f"Target prefix '{prefix_id}' does not exist")
 
         target_app_dir = p_dir / "prefix" / "drive_c" / "Program Files" / app_id
-        if target_app_dir.exists():
-            raise WineboxError(f"Application directory already exists: {target_app_dir}")
+        with prefix_lock(p_dir):
+            if target_app_dir.exists():
+                raise WineboxError(f"Application directory already exists: {target_app_dir}")
 
-        # Stage clone
-        stage_dir = self.repo.staging_dir / f"app_{uuid.uuid4().hex}"
-        try:
-            FilesystemAdapter.copy_directory(resolved_src, stage_dir)
+            # Stage clone
+            stage_dir = self.repo.staging_dir / f"app_{uuid.uuid4().hex}"
+            try:
+                FilesystemAdapter.copy_directory(resolved_src, stage_dir)
 
-            # Audit symlinks in staged copy
-            escaping = PrefixAuditor.scan_escaping_symlinks(stage_dir)
-            if escaping:
-                raise PrefixAuditError(
-                    f"Portable app contains {len(escaping)} escaping symlinks. Import aborted."
-                )
+                # Audit symlinks in staged copy
+                escaping = PrefixAuditor.scan_escaping_symlinks(stage_dir)
+                if escaping:
+                    raise PrefixAuditError(
+                        f"Portable app contains {len(escaping)} escaping symlinks. Import aborted."
+                    )
 
-            # Move atomically to prefix Program Files
-            FilesystemAdapter.atomic_move(stage_dir, target_app_dir)
-        finally:
-            FilesystemAdapter.remove_tree(stage_dir)
+                # Move atomically to prefix Program Files
+                FilesystemAdapter.atomic_move(stage_dir, target_app_dir)
+            finally:
+                FilesystemAdapter.remove_tree(stage_dir)
 
-        # Full relative exe path from prefix
-        full_rel_exe = f"drive_c/Program Files/{app_id}/{exe_rel_path.lstrip('/')}"
+            # Full relative exe path from prefix
+            full_rel_exe = f"drive_c/Program Files/{app_id}/{exe_rel_path.lstrip('/')}"
 
-        app = Application(
-            id=app_id,
-            name=name,
-            prefix_id=prefix_id,
-            exe_path=full_rel_exe,
-            runner_id=runner_id,
-            profile_id=profile_id,
-            policy=policy or SecurityPolicy(),
-        )
-        self.repo.save_app(app)
+            app = Application(
+                id=app_id,
+                name=name,
+                prefix_id=prefix_id,
+                exe_path=full_rel_exe,
+                runner_id=runner_id,
+                profile_id=profile_id,
+                policy=policy or SecurityPolicy(),
+            )
+            self.repo.save_app(app)
         return app
 
     def import_prefix(
