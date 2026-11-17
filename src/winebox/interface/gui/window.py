@@ -1,13 +1,15 @@
 """Main Libadwaita window with NavigationSplitView and ToastOverlay (ADR-028)."""
 
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 from gi.repository import Adw, Gtk
+from winebox.application.update_service import UpdateInfo
 from winebox.interface.gui.pages.doctor_page import DoctorPage
 from winebox.interface.gui.pages.library_page import LibraryPage
 from winebox.interface.gui.pages.prefixes_page import PrefixesPage
 from winebox.interface.gui.pages.profiles_page import ProfilesPage
 from winebox.interface.gui.pages.runners_page import RunnersPage
-from winebox.interface.gui.state import ServiceContainer
+from winebox.interface.gui.state import ServiceContainer, run_async
+from winebox.interface.gui.widgets.update_dialog import UpdateDialog
 
 
 class WineboxMainWindow(Adw.ApplicationWindow):
@@ -42,6 +44,21 @@ class WineboxMainWindow(Adw.ApplicationWindow):
         # Content stack
         content_toolbar = Adw.ToolbarView()
         self.content_header = Adw.HeaderBar()
+
+        # Update notification badge
+        self._latest_update_info: Optional[UpdateInfo] = None
+        self._update_badge = Gtk.Button(label="Update")
+        self._update_badge.set_icon_name("software-update-available-symbolic")
+        self._update_badge.add_css_class("suggested-action")
+        self._update_badge.set_visible(False)
+        self._update_badge.connect("clicked", self._on_update_badge_clicked)
+        self.content_header.pack_end(self._update_badge)
+
+        check_update_btn = Gtk.Button.new_from_icon_name("system-software-update-symbolic")
+        check_update_btn.set_tooltip_text("Check for Updates")
+        check_update_btn.connect("clicked", lambda *_: self.check_for_updates(interactive=True))
+        self.content_header.pack_end(check_update_btn)
+
         refresh_btn = Gtk.Button.new_from_icon_name("view-refresh-symbolic")
         refresh_btn.set_tooltip_text("Refresh (F5)")
         refresh_btn.connect("clicked", lambda *_: self.refresh_all())
@@ -88,6 +105,9 @@ class WineboxMainWindow(Adw.ApplicationWindow):
         if first_row:
             self.nav_list.select_row(first_row)
 
+        # Non-blocking startup check for updates
+        self.check_for_updates(interactive=False)
+
     def _on_nav_selected(self, _listbox: Gtk.ListBox, row: Gtk.ListBoxRow) -> None:
         if row is None or row not in self._row_to_key:
             return
@@ -117,3 +137,36 @@ class WineboxMainWindow(Adw.ApplicationWindow):
         for page in self.pages.values():
             if hasattr(page, "refresh"):
                 page.refresh()
+
+    def _on_update_badge_clicked(self, *_args: object) -> None:
+        if self._latest_update_info:
+            dlg = UpdateDialog(self, self.services, self._latest_update_info)
+            dlg.present(self)
+
+    def check_for_updates(self, interactive: bool = False) -> None:
+        if interactive:
+            self.show_toast("Checking for updates...")
+
+        def _work() -> Optional[UpdateInfo]:
+            return self.services.update_svc.check_update(force=interactive)
+
+        def _done(info: Optional[UpdateInfo]) -> None:
+            if info and info.has_update:
+                self._latest_update_info = info
+                self._update_badge.set_label(f"Update: v{info.latest_version}")
+                self._update_badge.set_visible(True)
+                if interactive:
+                    dlg = UpdateDialog(self, self.services, info)
+                    dlg.present(self)
+                else:
+                    self.show_toast(f"New version v{info.latest_version} available!", timeout=5)
+            else:
+                self._update_badge.set_visible(False)
+                if interactive:
+                    self.show_toast("WineBox is up to date!")
+
+        def _err(exc: Exception) -> None:
+            if interactive:
+                self.show_toast(f"Update check failed: {exc}")
+
+        run_async(_work, _done, _err)

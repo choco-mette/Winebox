@@ -18,6 +18,7 @@ from winebox.application.prefix import (
 )
 from winebox.application.profile_service import ProfileService
 from winebox.application.runner_service import RunnerService
+from winebox.application.update_service import UpdateService
 from winebox.application.winetricks_service import WinetricksService
 from winebox.common.exceptions import WineboxError
 from winebox.infrastructure.sqlite_repository import SqliteRepository
@@ -52,6 +53,7 @@ class ServiceContainer:
         self.profile_svc = ProfileService(repo=self.repo)
         self.winetricks_svc = WinetricksService(repo=self.repo)
         self.group_svc = GroupService(repo=self.repo)
+        self.update_svc = UpdateService(data_root=self.repo.data_root)
 
 
 def format_size(size_bytes: int) -> str:

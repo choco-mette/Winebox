@@ -439,6 +439,27 @@ class TestGuiCliAndApp(unittest.TestCase):
             err_dlg._on_close_clicked()
             self.assertIn("Task failed hard", error_captured)
 
+            # Test UpdateDialog instantiation
+            from winebox.application.update_service import UpdateInfo
+            from winebox.interface.gui.widgets.update_dialog import UpdateDialog
+
+            up_info = UpdateInfo(
+                current_version="0.1.0",
+                latest_version="0.1.1",
+                has_update=True,
+                release_title="Release v0.1.1",
+                release_notes="* New features\n* Bug fixes",
+                html_url="https://github.com/example",
+                assets=[],
+                matching_asset={"name": "winebox_0.1.1_all.deb", "browser_download_url": "http://deb"},
+                is_git_install=True,
+                distro_family="debian",
+            )
+            up_dlg = UpdateDialog(parent_window=win, services=services, update_info=up_info)
+            up_dlg.present(win)
+            self.assertIsNotNone(up_dlg._update_btn)
+            up_dlg.close()
+
             win.close()
 
 
