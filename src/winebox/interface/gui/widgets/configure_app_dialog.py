@@ -110,8 +110,33 @@ class ConfigureAppDialog(Adw.Dialog):
             self._runner_row.set_selected(runner_ids.index(self._app.runner_id))
         group.add(self._runner_row)
 
+        self._group_row = Adw.ActionRow(title="Categories / Groups")
+        self._update_group_subtitle()
+        edit_grp_btn = Gtk.Button(label="Edit...")
+        edit_grp_btn.set_valign(Gtk.Align.CENTER)
+        edit_grp_btn.connect("clicked", self._on_edit_groups)
+        self._group_row.add_suffix(edit_grp_btn)
+        group.add(self._group_row)
+
         page.add(group)
         self._stack.add_titled_with_icon(page, "app", "App & Runner", "applications-games-symbolic")
+
+    def _update_group_subtitle(self) -> None:
+        grps = self._services.group_svc.get_app_groups(self._app.id)
+        if grps:
+            self._group_row.set_subtitle(", ".join(g.name for g in grps))
+        else:
+            self._group_row.set_subtitle("Uncategorized")
+
+    def _on_edit_groups(self, *_args: object) -> None:
+        from winebox.interface.gui.widgets.group_assignment_dialog import GroupAssignmentDialog
+        dlg = GroupAssignmentDialog(
+            parent_window=self._parent,
+            services=self._services,
+            app_obj=self._app,
+            on_saved=lambda _: self._update_group_subtitle(),
+        )
+        dlg.present(self)
 
     def _build_sandbox_tab(self) -> None:
         page = Adw.PreferencesPage()

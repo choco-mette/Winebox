@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Generator, List, Optional
 from winebox.common.exceptions import ResourceNotFoundError, WineboxError
 from winebox.domain.models import (
+    AppGroup,
     Application,
     AppStatus,
     HostMount,
@@ -198,6 +199,9 @@ class SqliteRepository:
             conn.execute("DELETE FROM app_env_vars WHERE app_id = ?", (app.id,))
             for k, v in app.policy.env_vars.items():
                 conn.execute("INSERT INTO app_env_vars (app_id, key, value) VALUES (?, ?, ?)", (app.id, k, v))
+            conn.execute("DELETE FROM app_groups WHERE app_id = ?", (app.id,))
+            for gid in getattr(app, "groups", []):
+                conn.execute("INSERT OR IGNORE INTO app_groups (app_id, group_id) VALUES (?, ?)", (app.id, gid))
         self.sync_prefix_snapshot(app.prefix_id)
 
     def update_app_last_run(self, app_id: str, exit_code: int) -> None:
@@ -217,6 +221,8 @@ class SqliteRepository:
             ]
             env_vars = {e["key"]: e["value"] for e in conn.execute("SELECT * FROM app_env_vars WHERE app_id = ?", (app_id,)).fetchall()}
             policy = prof.to_policy(host_mounts=mounts, env_vars=env_vars)
+            g_rows = conn.execute("SELECT group_id FROM app_groups WHERE app_id = ?", (app_id,)).fetchall()
+            assigned_groups = [g["group_id"] for g in g_rows]
             raw_sc = json.loads(row["shortcut_config"] or "{}") if "shortcut_config" in row.keys() else {}
             shortcut = ShortcutSettings(
                 menu_enabled=bool(raw_sc.get("menu_enabled", False)),
@@ -232,6 +238,7 @@ class SqliteRepository:
                 exe_path=row["exe_path"], runner_id=row["runner_id"], profile_id=row["profile_id"],
                 arguments=json.loads(row["default_args"] or "[]"), policy=policy,
                 shortcut=shortcut,
+                groups=assigned_groups,
                 status=AppStatus(row["status"]),
                 last_run_at=datetime.fromisoformat(row["last_run_at"]) if row["last_run_at"] else None,
                 last_exit_code=row["last_exit_code"],
@@ -314,3 +321,63 @@ class SqliteRepository:
             cur = conn.execute("DELETE FROM runners WHERE id = ?", (runner_id,))
             if cur.rowcount == 0:
                 raise ResourceNotFoundError(f"Runner '{runner_id}' not found")
+
+    # ---------------- Application Groups CRUD ----------------
+    def save_group(self, group: AppGroup) -> None:
+        with self.get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO groups (id, name, icon, sort_order, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    name = excluded.name,
+                    icon = excluded.icon,
+                    sort_order = excluded.sort_order;
+                """,
+                (group.id, group.name, group.icon, group.sort_order, group.created_at.isoformat()),
+            )
+
+    def load_group(self, group_id: str) -> AppGroup:
+        with self.get_connection() as conn:
+            row = conn.execute("SELECT * FROM groups WHERE id = ?", (group_id,)).fetchone()
+            if not row:
+                raise ResourceNotFoundError(f"Group '{group_id}' not found")
+            return AppGroup(
+                id=row["id"],
+                name=row["name"],
+                icon=row["icon"] or "",
+                sort_order=row["sort_order"] or 0,
+                created_at=datetime.fromisoformat(row["created_at"]),
+            )
+
+    def list_groups(self) -> List[AppGroup]:
+        with self.get_connection() as conn:
+            rows = conn.execute("SELECT * FROM groups ORDER BY sort_order ASC, name ASC").fetchall()
+            return [
+                AppGroup(
+                    id=r["id"],
+                    name=r["name"],
+                    icon=r["icon"] or "",
+                    sort_order=r["sort_order"] or 0,
+                    created_at=datetime.fromisoformat(r["created_at"]),
+                )
+                for r in rows
+            ]
+
+    def delete_group(self, group_id: str) -> None:
+        with self.get_connection() as conn:
+            conn.execute("DELETE FROM app_groups WHERE group_id = ?", (group_id,))
+            cur = conn.execute("DELETE FROM groups WHERE id = ?", (group_id,))
+            if cur.rowcount == 0:
+                raise ResourceNotFoundError(f"Group '{group_id}' not found")
+
+    def set_app_groups(self, app_id: str, group_ids: List[str]) -> None:
+        with self.get_connection() as conn:
+            conn.execute("DELETE FROM app_groups WHERE app_id = ?", (app_id,))
+            for gid in group_ids:
+                conn.execute("INSERT OR IGNORE INTO app_groups (app_id, group_id) VALUES (?, ?)", (app_id, gid))
+
+    def get_app_group_ids(self, app_id: str) -> List[str]:
+        with self.get_connection() as conn:
+            rows = conn.execute("SELECT group_id FROM app_groups WHERE app_id = ?", (app_id,)).fetchall()
+            return [r["group_id"] for r in rows]

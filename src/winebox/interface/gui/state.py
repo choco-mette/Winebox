@@ -8,6 +8,7 @@ from typing import Any, Callable, List, Optional
 from winebox.application.app_service import AppService
 from winebox.application.desktop_service import DesktopService
 from winebox.application.execution_service import ExecutionService
+from winebox.application.group_service import GroupService
 from winebox.application.import_service import ImportService
 from winebox.application.install_service import InstallService
 from winebox.application.prefix import (
@@ -50,6 +51,7 @@ class ServiceContainer:
         self.runner_svc = RunnerService(repo=self.repo)
         self.profile_svc = ProfileService(repo=self.repo)
         self.winetricks_svc = WinetricksService(repo=self.repo)
+        self.group_svc = GroupService(repo=self.repo)
 
 
 def format_size(size_bytes: int) -> str:

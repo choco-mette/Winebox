@@ -370,6 +370,39 @@ class TestGuiCliAndApp(unittest.TestCase):
             self.assertIn("line 3", dlg._last_content)
 
             dlg._confirm_clear_logs()
+
+            # Test GroupAssignmentDialog & Library expanders
+            from winebox.interface.gui.widgets.group_assignment_dialog import GroupAssignmentDialog
+
+            # Create sample group
+            grp = services.group_svc.create_group("Retro Games", group_id="retro")
+
+            # Register app and open GroupAssignmentDialog
+            demo_app = services.app_svc.register_app(
+                app_id="bk-app",
+                name="Backup App",
+                prefix_id="pfx-bk",
+                exe_path="drive_c/app.exe",
+            )
+            grp_dlg = GroupAssignmentDialog(
+                parent_window=win,
+                services=services,
+                app_obj=demo_app,
+                on_saved=lambda gids: None,
+            )
+            grp_dlg.present(win)
+            self.assertIn("retro", grp_dlg._check_buttons)
+            grp_dlg._check_buttons["retro"].set_active(True)
+            grp_dlg._on_save_clicked()
+
+            self.assertIn("retro", services.repo.get_app_group_ids("bk-app"))
+
+            # Refresh library and verify expanders created
+            lib_page = win.pages["library"]
+            lib_page.refresh()
+            expanders = [ch for ch in lib_page._content_box if isinstance(ch, Gtk.Expander)]
+            self.assertTrue(len(expanders) >= 1)
+
             win.close()
 
 

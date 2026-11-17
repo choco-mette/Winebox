@@ -6,6 +6,7 @@ from rich.console import Console
 
 from winebox.interface.commands.add_cmd import add_wizard
 from winebox.interface.commands.app_cmd import app_app
+from winebox.interface.commands.group_cmd import group_app
 from winebox.interface.commands.gui_cmd import launch_gui_command
 from winebox.interface.commands.import_cmd import import_app
 from winebox.interface.commands.lutris_cmd import lutris_app
@@ -22,6 +23,7 @@ app = typer.Typer(
 
 app.add_typer(prefix_app, name="prefix")
 app.add_typer(app_app, name="app")
+app.add_typer(group_app, name="group")
 app.add_typer(runner_app, name="runner")
 app.add_typer(system_app, name="system")
 app.add_typer(import_app, name="import")

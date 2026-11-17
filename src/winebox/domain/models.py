@@ -89,6 +89,15 @@ class ShortcutSettings:
 
 
 @dataclass
+class AppGroup:
+    id: str
+    name: str
+    icon: str = ""
+    sort_order: int = 0
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+@dataclass
 class Application:
     id: str
     name: str
@@ -99,6 +108,7 @@ class Application:
     arguments: List[str] = field(default_factory=list)
     policy: SecurityPolicy = field(default_factory=SecurityPolicy)
     shortcut: ShortcutSettings = field(default_factory=ShortcutSettings)
+    groups: List[str] = field(default_factory=list)
     status: AppStatus = AppStatus.READY
     last_run_at: Optional[datetime] = None
     last_exit_code: Optional[int] = None

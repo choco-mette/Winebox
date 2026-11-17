@@ -185,3 +185,25 @@ def app_kill(
         console.print(f"[bold red]Kill Error:[/bold red] {e}")
         raise typer.Exit(code=1)
 
+
+@app_app.command("set-groups")
+def app_set_groups(
+    app_id: str = typer.Argument(..., help="Application ID to assign groups to"),
+    group_ids: List[str] = typer.Argument(None, help="Group IDs to associate with this application"),
+) -> None:
+    """Assign an application to one or more groups (replaces existing group list)."""
+    from winebox.application.group_service import GroupService
+
+    svc = GroupService()
+    try:
+        chosen = group_ids or []
+        svc.assign_groups(app_id, chosen)
+        if chosen:
+            console.print(f"[bold green]✓[/bold green] Assigned '{app_id}' to groups: {', '.join(chosen)}")
+        else:
+            console.print(f"[bold green]✓[/bold green] Cleared groups for '{app_id}' (now Uncategorized)")
+    except WineboxError as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+
