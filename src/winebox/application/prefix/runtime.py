@@ -108,7 +108,10 @@ class PrefixRuntimeService:
                 custom_runner_dir=runner.wine_bin.parent.parent if not runner.is_system else None,
             )
             bwrap_args = builder.build_bwrap_args()
-            cmd = WineAdapter.build_run_cmd(cleaned_tool, args=args, runner=runner)
+            if cleaned_tool == "cmd" and not inherit_stdio:
+                cmd = WineAdapter.build_run_cmd("wineconsole", args=["cmd", *(args or [])], runner=runner)
+            else:
+                cmd = WineAdapter.build_run_cmd(cleaned_tool, args=args, runner=runner)
             try:
                 res = self.bwrap_adapter.execute_in_sandbox(
                     bwrap_args=bwrap_args,

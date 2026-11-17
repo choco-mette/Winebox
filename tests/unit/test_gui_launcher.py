@@ -201,6 +201,27 @@ class TestGuiCliAndApp(unittest.TestCase):
                 res = services.prefix_runtime.kill_prefix("pfx-kill")
                 self.assertNotIn(os.getpid(), res["killed_pids"])
 
+    def test_run_tool_cmd_uses_wineconsole_when_non_interactive(self) -> None:
+        from unittest.mock import MagicMock
+        from winebox.application.prefix.runtime import PrefixRuntimeService
+        from winebox.domain.models import Prefix
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = SqliteRepository(data_root=root / "data", config_root=root / "cfg")
+            repo.save_prefix(Prefix(id="pfx-cmd", name="pfx-cmd"))
+            p_dir = repo.get_prefix_dir("pfx-cmd")
+            (p_dir / "prefix" / "dosdevices").mkdir(parents=True, exist_ok=True)
+
+            mock_bwrap = MagicMock()
+            mock_bwrap.execute_in_sandbox.return_value = MagicMock(returncode=0, stderr="")
+            rt = PrefixRuntimeService(repo=repo, bwrap_adapter=mock_bwrap)
+            rt.run_tool("pfx-cmd", "cmd", inherit_stdio=False)
+
+            called_cmd = mock_bwrap.execute_in_sandbox.call_args.kwargs["command_inside"]
+            self.assertIn("wineconsole", called_cmd)
+            self.assertIn("cmd", called_cmd)
+
     def test_app_service_update_app_and_policy_validation(self) -> None:
         from winebox.common.exceptions import PolicyValidationError
         from winebox.domain.models import HostMount, MountMode, Prefix, SecurityPolicy
