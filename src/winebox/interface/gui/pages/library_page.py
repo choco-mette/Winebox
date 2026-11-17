@@ -161,7 +161,7 @@ class LibraryPage(Gtk.Box):
             if enabled
         ]
         subtitle = (
-            f"Prefix: {app_obj.prefix_id}  •  Runner: {app_obj.runner_id}  •  "
+            f"Prefix: {app_obj.prefix_id} - Runner: {app_obj.runner_id} - "
             f"Policy: {', '.join(flags) or 'Headless'}"
         )
         row = Adw.ActionRow(title=app_obj.name, subtitle=subtitle)

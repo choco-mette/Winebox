@@ -60,7 +60,7 @@ class RunnersPage(Gtk.Box):
         runners = self._window.services.runner_svc.list_runners()
         for r in runners:
             r_type = "System" if r.is_system else "Custom"
-            row = Adw.ActionRow(title=f"{r.id} ({r.name})", subtitle=f"{r_type}  •  {r.wine_bin}")
+            row = Adw.ActionRow(title=f"{r.id} ({r.name})", subtitle=f"{r_type} - {r.wine_bin}")
             if not r.is_system:
                 share_btn = Gtk.Button(label="Share")
                 share_btn.set_valign(Gtk.Align.CENTER)

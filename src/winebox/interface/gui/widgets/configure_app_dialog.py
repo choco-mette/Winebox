@@ -84,7 +84,7 @@ class ConfigureAppDialog(Adw.Dialog):
         page = Adw.PreferencesPage()
         group = Adw.PreferencesGroup(
             title="Application and Runner",
-            description=f"Prefix: {self._app.prefix_id}  •  ID: {self._app.id}",
+            description=f"Prefix: {self._app.prefix_id} - ID: {self._app.id}",
         )
 
         self._name_row = Adw.EntryRow(title="Application Name")
