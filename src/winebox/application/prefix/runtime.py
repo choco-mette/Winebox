@@ -83,6 +83,7 @@ class PrefixRuntimeService:
         tool_name: str,
         args: Optional[List[str]] = None,
         inherit_stdio: bool = True,
+        runner_id: Optional[str] = None,
     ) -> int:
         """Executes an allowlisted Wine utility (winecfg, regedit, cmd, etc.) inside the prefix sandbox."""
         cleaned_tool = tool_name.strip().lower()
@@ -92,12 +93,12 @@ class PrefixRuntimeService:
             )
 
         prefix = self.repo.load_prefix(prefix_id)
-        runner = self.repo.load_runner(prefix.runner_id)
+        runner = self.repo.load_runner(runner_id or prefix.runner_id)
         p_dir = self.repo.get_prefix_dir(prefix.id)
         prefix_inner = p_dir / "prefix"
         home_inner = p_dir / "home"
 
-        policy = SecurityPolicy(display=True, audio=False, network=False, gpu=False, gamepad=False)
+        policy = SecurityPolicy(display=True, audio=True, network=False, gpu=True, gamepad=False)
 
         with prefix_lock(p_dir):
             builder = MountBuilder(
@@ -115,7 +116,11 @@ class PrefixRuntimeService:
                     inherit_stdio=inherit_stdio,
                 )
                 if res.returncode != 0:
-                    raise WineboxError(f"Wine tool '{cleaned_tool}' exited with code {res.returncode}")
+                    err_detail = res.stderr.strip() if res.stderr else ""
+                    suffix = f": {err_detail}" if err_detail else ""
+                    raise WineboxError(
+                        f"Wine tool '{cleaned_tool}' exited with code {res.returncode}{suffix}"
+                    )
                 return res.returncode
             finally:
                 PrefixAuditor.sanitize_dosdevices(prefix_inner)

@@ -116,7 +116,7 @@ class LibraryPage(Gtk.Box):
         actions = (
             ("View Logs", lambda: self._show_logs(app_obj.prefix_id), False),
             ("Open Prefix Files", lambda: self._window.open_prefix_files(app_obj.prefix_id), False),
-            ("Winecfg", lambda: self._run_wine_tool(app_obj.prefix_id, "winecfg"), False),
+            ("Winecfg", lambda: self._run_wine_tool(app_obj.prefix_id, "winecfg", app_obj.runner_id), False),
             ("Winetricks", lambda: self._run_winetricks(app_obj.prefix_id), False),
             (shortcut_label, lambda: self._toggle_shortcut(app_obj.id, has_shortcut), False),
             ("Remove from Library", lambda: self._confirm_remove_app(app_obj), True),
@@ -165,10 +165,12 @@ class LibraryPage(Gtk.Box):
             on_error=lambda e: self._window.show_toast(f"Kill failed: {e}"),
         )
 
-    def _run_wine_tool(self, prefix_id: str, tool_name: str) -> None:
+    def _run_wine_tool(self, prefix_id: str, tool_name: str, runner_id: str | None = None) -> None:
         self._window.show_toast(f"Launching {tool_name} in '{prefix_id}'...")
         run_async(
-            lambda: self._window.services.prefix_runtime.run_tool(prefix_id, tool_name, inherit_stdio=False),
+            lambda: self._window.services.prefix_runtime.run_tool(
+                prefix_id, tool_name, inherit_stdio=False, runner_id=runner_id
+            ),
             on_success=lambda _: (self._window.show_toast(f"{tool_name} closed"), self.refresh()),
             on_error=lambda e: self._window.show_toast(f"{tool_name} error: {e}"),
         )
