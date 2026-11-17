@@ -184,6 +184,23 @@ class TestGuiCliAndApp(unittest.TestCase):
             self.assertFalse(paths["desktop"].exists())
             self.assertEqual(repo.load_app("sc-app").shortcut.icon, "steam")
 
+    def test_kill_prefix_never_kills_self_gui_process(self) -> None:
+        from winebox.domain.models import Prefix
+        from winebox.infrastructure.process_manager import prefix_lock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = SqliteRepository(data_root=root / "data", config_root=root / "cfg")
+            services = ServiceContainer(repo=repo)
+            repo.save_prefix(Prefix(id="pfx-kill", name="pfx-kill"))
+            p_dir = repo.get_prefix_dir("pfx-kill")
+            (p_dir / "prefix" / "dosdevices").mkdir(parents=True, exist_ok=True)
+
+            with prefix_lock(p_dir):
+                # prefix.lock records os.getpid() (simulating WineBox GUI launching in background thread)
+                res = services.prefix_runtime.kill_prefix("pfx-kill")
+                self.assertNotIn(os.getpid(), res["killed_pids"])
+
     def test_app_service_update_app_and_policy_validation(self) -> None:
         from winebox.common.exceptions import PolicyValidationError
         from winebox.domain.models import HostMount, MountMode, Prefix, SecurityPolicy

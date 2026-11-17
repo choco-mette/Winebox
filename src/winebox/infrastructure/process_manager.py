@@ -222,3 +222,42 @@ class ProcessManager:
                 continue
 
         return pids
+
+    @classmethod
+    def find_descendant_pids(cls, root_pids: List[int]) -> List[int]:
+        """Collect all living descendant PIDs for the given root PIDs via /proc/*/stat."""
+        if not root_pids:
+            return []
+        parent_map: dict[int, List[int]] = {}
+        proc_dir = Path("/proc")
+        if not proc_dir.exists():
+            return []
+
+        for entry in proc_dir.iterdir():
+            if not entry.is_dir() or not entry.name.isdigit():
+                continue
+            pid = int(entry.name)
+            try:
+                stat_text = (entry / "stat").read_text(errors="ignore")
+                rparen = stat_text.rfind(")")
+                if rparen == -1:
+                    continue
+                fields = stat_text[rparen + 2 :].split()
+                if len(fields) >= 2:
+                    ppid = int(fields[1])
+                    parent_map.setdefault(ppid, []).append(pid)
+            except (OSError, ValueError):
+                continue
+
+        descendants: List[int] = []
+        queue = list(root_pids)
+        seen = set(root_pids)
+        my_pid = os.getpid()
+        while queue:
+            cur = queue.pop(0)
+            for child in parent_map.get(cur, []):
+                if child != my_pid and child not in seen:
+                    seen.add(child)
+                    descendants.append(child)
+                    queue.append(child)
+        return descendants

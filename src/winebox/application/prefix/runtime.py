@@ -1,5 +1,6 @@
 """Prefix runtime control service (kill switch and sandboxed Wine tools)."""
 
+import os
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -42,17 +43,22 @@ class PrefixRuntimeService:
         prefix_inner = p_dir / "prefix"
         killed_pids: List[int] = []
 
+        my_pid = os.getpid()
         recorded_pid = PrefixLock.read_locked_pid(p_dir)
         is_locked = PrefixLock.is_locked(p_dir)
 
         pids_to_kill: List[int] = []
-        if recorded_pid and ProcessManager.is_pid_alive(recorded_pid):
+        if recorded_pid and recorded_pid != my_pid and ProcessManager.is_pid_alive(recorded_pid):
             pids_to_kill.append(recorded_pid)
 
         matched_pids = ProcessManager.find_processes_by_prefix(p_dir)
         for m_pid in matched_pids:
-            if m_pid not in pids_to_kill:
+            if m_pid != my_pid and m_pid not in pids_to_kill:
                 pids_to_kill.append(m_pid)
+
+        for desc_pid in ProcessManager.find_descendant_pids(pids_to_kill):
+            if desc_pid != my_pid and desc_pid not in pids_to_kill:
+                pids_to_kill.append(desc_pid)
 
         if not pids_to_kill and not is_locked:
             PrefixAuditor.sanitize_dosdevices(prefix_inner)
