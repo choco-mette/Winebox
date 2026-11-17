@@ -107,8 +107,8 @@ class TestGuiCliAndApp(unittest.TestCase):
             )
 
             gui_app = WineboxGuiApp(services=services)
-            gui_app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
             self.assertEqual(gui_app.get_application_id(), "id.winebox.WineBox")
+            gui_app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
             gui_app.register(None)
             gui_app.activate()
             win = gui_app._window
@@ -273,6 +273,61 @@ class TestGuiCliAndApp(unittest.TestCase):
                         host_mounts=[HostMount(host_path=Path("/etc"), sandbox_path=Path("/mnt/etc"), mode=MountMode.RO)]
                     ),
                 )
+
+    def test_prefixes_page_backup_and_restore_actions(self) -> None:
+        if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+            self.skipTest("No active display")
+        try:
+            import gi
+
+            gi.require_version("Gtk", "4.0")
+            gi.require_version("Adw", "1")
+        except (ImportError, ValueError):
+            self.skipTest("GTK4 / Libadwaita not available")
+
+        from gi.repository import Gio, Gtk
+        from winebox.domain.models import Prefix
+        from winebox.interface.gui.app import WineboxGuiApp
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo = SqliteRepository(data_root=root / "data", config_root=root / "cfg")
+            services = ServiceContainer(repo=repo)
+            repo.save_prefix(Prefix(id="pfx-bk", name="pfx-bk"))
+            p_dir = repo.get_prefix_dir("pfx-bk")
+            (p_dir / "prefix" / "drive_c").mkdir(parents=True, exist_ok=True)
+            (p_dir / "home").mkdir(parents=True, exist_ok=True)
+
+            gui_app = WineboxGuiApp(services=services)
+            gui_app.set_application_id("id.winebox.WineBox.TestBackup")
+            gui_app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
+            gui_app.register(None)
+            gui_app.activate()
+            win = gui_app._window
+            assert win is not None
+
+            pfx_page = win.pages["prefixes"]
+            pfx_page.refresh()
+
+            # Find action buttons
+            action_labels = []
+            for child in pfx_page:
+                if isinstance(child, Gtk.Box) and child.get_orientation() == Gtk.Orientation.HORIZONTAL:
+                    for sub in child:
+                        if isinstance(sub, Gtk.Button) and sub.get_label():
+                            action_labels.append(sub.get_label())
+
+            self.assertIn("Backup", action_labels)
+            self.assertIn("Restore", action_labels)
+
+            # Test custom path backup
+            custom_backup = root / "custom_backup.tar.gz"
+            saved_path = services.prefix_backup.backup_prefix("pfx-bk", output_path=custom_backup)
+            self.assertTrue(saved_path.exists())
+
+            # Test restore dialog prompt instantiation
+            pfx_page._prompt_restore_options(saved_path)
+            win.close()
 
 
 if __name__ == "__main__":
