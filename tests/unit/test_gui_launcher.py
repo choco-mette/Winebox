@@ -326,7 +326,7 @@ class TestGuiCliAndApp(unittest.TestCase):
             self.assertTrue(saved_path.exists())
 
             # Test restore dialog prompt instantiation
-            pfx_page._prompt_restore_options(saved_path)
+            pfx_page._confirm_restore("pfx-bk", saved_path)
             win.close()
 
 

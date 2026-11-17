@@ -178,10 +178,14 @@ class PrefixesPage(Gtk.Box):
         dlg.save(self._window, None, _on_save_chosen)
 
     def _restore_prefix(self) -> None:
+        pid = self._selected_prefix_id()
+        if not pid:
+            self._window.show_toast("No prefix selected")
+            return
         backups_dir = self._window.services.repo.data_root / "backups"
         backups_dir.mkdir(parents=True, exist_ok=True)
 
-        dlg = Gtk.FileDialog(title="Select Prefix Backup Archive")
+        dlg = Gtk.FileDialog(title=f"Select Backup Archive to Restore into '{pid}'")
         if backups_dir.is_dir():
             dlg.set_initial_folder(Gio.File.new_for_path(str(backups_dir)))
 
@@ -199,41 +203,30 @@ class PrefixesPage(Gtk.Box):
                 if not gfile or not gfile.get_path():
                     return
                 archive_path = Path(gfile.get_path())
-                self._prompt_restore_options(archive_path)
+                self._confirm_restore(pid, archive_path)
             except Exception:
                 pass
 
         dlg.open(self._window, None, _on_open_chosen)
 
-    def _prompt_restore_options(self, archive_path: Path) -> None:
-        dlg = Adw.AlertDialog.new("Restore Prefix Backup", f"Archive: {archive_path.name}")
-        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        content_box.set_margin_top(8)
-        content_box.set_margin_bottom(8)
-
-        id_entry = Gtk.Entry(placeholder_text="Target Prefix ID (leave empty to use original)")
-        content_box.append(id_entry)
-
-        force_chk = Gtk.CheckButton(label="Overwrite if prefix already exists")
-        content_box.append(force_chk)
-
-        dlg.set_extra_child(content_box)
+    def _confirm_restore(self, prefix_id: str, archive_path: Path) -> None:
+        dlg = Adw.AlertDialog.new(
+            f"Restore into '{prefix_id}'?",
+            f"Archive: {archive_path.name}\n\nCurrent prefix data will be replaced by the backup snapshot.",
+        )
         dlg.add_response("cancel", "Cancel")
-        dlg.add_response("restore", "Restore")
-        dlg.set_response_appearance("restore", Adw.ResponseAppearance.SUGGESTED)
+        dlg.add_response("restore", "Restore & Overwrite")
+        dlg.set_response_appearance("restore", Adw.ResponseAppearance.DESTRUCTIVE)
 
         def _on_resp(_d: Adw.AlertDialog, resp: str) -> None:
             if resp != "restore":
                 return
-            target_id = id_entry.get_text().strip().lower().replace(" ", "-") or None
-            force = force_chk.get_active()
-
-            self._window.show_toast(f"Restoring '{archive_path.name}'...")
+            self._window.show_toast(f"Restoring into '{prefix_id}'...")
             run_async(
                 lambda: self._window.services.prefix_backup.restore_prefix(
                     archive_path=archive_path,
-                    target_prefix_id=target_id,
-                    force=force,
+                    target_prefix_id=prefix_id,
+                    force=True,
                 ),
                 on_success=lambda restored: (
                     self._window.show_toast(f"Restored prefix '{restored.id}'"),
