@@ -115,6 +115,9 @@ class PrefixRuntimeService:
                     command_inside=cmd,
                     inherit_stdio=inherit_stdio,
                 )
+                if res.returncode in (-15, -9, 143, 137):
+                    # Terminated via SIGTERM/SIGKILL (e.g. user clicked Kill)
+                    return res.returncode
                 if res.returncode != 0:
                     err_detail = res.stderr.strip() if res.stderr else ""
                     suffix = f": {err_detail}" if err_detail else ""
