@@ -6,8 +6,9 @@ from typing import List, Optional
 from gi.repository import Adw, Gio, Gtk
 from winebox.infrastructure.backup_adapter import BackupAdapter
 from winebox.infrastructure.process_manager import PrefixLock
-from winebox.interface.gui.state import run_async
+from winebox.interface.gui.state import format_size, run_async
 from winebox.interface.gui.widgets.log_viewer_dialog import LogViewerDialog
+from winebox.interface.gui.widgets.operation_progress_dialog import OperationProgressDialog
 from winebox.interface.gui.widgets.prefix_file_manager import PrefixFileManager
 
 
@@ -117,12 +118,22 @@ class PrefixesPage(Gtk.Box):
             pid = entry.get_text().strip().lower().replace(" ", "-")
             if resp != "create" or not pid:
                 return
-            self._window.show_toast(f"Creating prefix '{pid}'...")
-            run_async(
-                lambda: self._window.services.prefix_lifecycle.create_prefix(pid),
-                on_success=lambda _: (self._window.show_toast(f"Created '{pid}'"), self.refresh()),
+
+            def _create_task() -> str:
+                self._window.services.prefix_lifecycle.create_prefix(pid)
+                return f"Prefix '{pid}' created and ready to use."
+
+            prog_dlg = OperationProgressDialog(
+                title=f"Creating Prefix '{pid}'",
+                task_fn=_create_task,
+                parent_window=self._window,
+                status_text=f"Initializing Wine environment and prefix structure for '{pid}'...",
+                prefix_id=pid,
+                log_fetch_fn=self._window.services.prefix_lifecycle.read_logs,
+                on_success=lambda _: (self.refresh(), self.select_prefix(pid)),
                 on_error=lambda e: self._window.show_toast(f"Create failed: {e}"),
             )
+            prog_dlg.present(self._window)
 
         dlg.connect("response", _on_resp)
         dlg.present(self._window)
@@ -168,12 +179,23 @@ class PrefixesPage(Gtk.Box):
                 if not gfile or not gfile.get_path():
                     return
                 chosen_path = Path(gfile.get_path())
-                self._window.show_toast(f"Creating snapshot backup for '{pid}'...")
-                run_async(
-                    lambda: self._window.services.prefix_backup.backup_prefix(pid, output_path=chosen_path),
-                    on_success=lambda path: self._window.show_toast(f"Backup saved: {path.name}"),
+
+                def _backup_task() -> str:
+                    saved = self._window.services.prefix_backup.backup_prefix(pid, output_path=chosen_path)
+                    size_str = format_size(saved.stat().st_size) if saved.exists() else ""
+                    return f"Backup archive saved successfully:\n{saved.name} ({size_str})"
+
+                prog_dlg = OperationProgressDialog(
+                    title=f"Backing up '{pid}'",
+                    task_fn=_backup_task,
+                    parent_window=self._window,
+                    status_text=f"Creating compressed snapshot archive for prefix '{pid}'...",
+                    prefix_id=pid,
+                    log_fetch_fn=self._window.services.prefix_lifecycle.read_logs,
+                    on_success=lambda _: self._window.show_toast(f"Backup saved: {chosen_path.name}"),
                     on_error=lambda e: self._window.show_toast(f"Backup failed: {e}"),
                 )
+                prog_dlg.present(self._window)
             except Exception:
                 pass
 
@@ -223,21 +245,31 @@ class PrefixesPage(Gtk.Box):
         def _on_resp(_d: Adw.AlertDialog, resp: str) -> None:
             if resp != "restore":
                 return
-            self._window.show_toast(f"Restoring into '{prefix_id}'...")
-            run_async(
-                lambda: self._window.services.prefix_backup.restore_prefix(
+
+            def _restore_task() -> str:
+                restored = self._window.services.prefix_backup.restore_prefix(
                     archive_path=archive_path,
                     target_prefix_id=prefix_id,
                     force=True,
-                ),
-                on_success=lambda restored: (
-                    self._window.show_toast(f"Restored prefix '{restored.id}'"),
+                )
+                return f"Prefix '{restored.id}' restored successfully from snapshot."
+
+            prog_dlg = OperationProgressDialog(
+                title=f"Restoring Prefix '{prefix_id}'",
+                task_fn=_restore_task,
+                parent_window=self._window,
+                status_text=f"Extracting and restoring prefix from '{archive_path.name}'...",
+                prefix_id=prefix_id,
+                log_fetch_fn=self._window.services.prefix_lifecycle.read_logs,
+                on_success=lambda _: (
                     self.refresh(),
-                    self.select_prefix(restored.id),
+                    self.select_prefix(prefix_id),
                     self._window.pages["library"].refresh(),
+                    self._window.show_toast(f"Restored prefix '{prefix_id}'"),
                 ),
                 on_error=lambda e: self._window.show_toast(f"Restore failed: {e}"),
             )
+            prog_dlg.present(self._window)
 
         dlg.connect("response", _on_resp)
         dlg.present(self._window)

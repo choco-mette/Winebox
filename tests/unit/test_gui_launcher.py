@@ -403,6 +403,42 @@ class TestGuiCliAndApp(unittest.TestCase):
             expanders = [ch for ch in lib_page._content_box if isinstance(ch, Gtk.Expander)]
             self.assertTrue(len(expanders) >= 1)
 
+            # Test OperationProgressDialog success and error states
+            from winebox.interface.gui.widgets.operation_progress_dialog import OperationProgressDialog
+
+            success_results = []
+            prog_dlg = OperationProgressDialog(
+                title="Test Task",
+                task_fn=lambda: "Finished test output",
+                parent_window=win,
+                on_success=lambda res: success_results.append(res),
+            )
+            prog_dlg.present(win)
+            self.assertFalse(prog_dlg._close_btn.get_sensitive())
+            # Directly execute success handler to test state transition
+            prog_dlg._handle_task_success("Finished test output")
+            self.assertTrue(prog_dlg._is_completed)
+            self.assertTrue(prog_dlg._close_btn.get_sensitive())
+            self.assertEqual(prog_dlg._icon_stack.get_visible_child_name(), "success")
+            prog_dlg._on_close_clicked()
+            self.assertEqual(success_results, ["Finished test output"])
+
+            # Test error handler state transition
+            error_captured = []
+            err_dlg = OperationProgressDialog(
+                title="Failing Task",
+                task_fn=lambda: None,
+                parent_window=win,
+                on_error=lambda err: error_captured.append(str(err)),
+            )
+            err_dlg.present(win)
+            err_dlg._handle_task_error(RuntimeError("Task failed hard"))
+            self.assertTrue(err_dlg._is_completed)
+            self.assertTrue(err_dlg._close_btn.get_sensitive())
+            self.assertEqual(err_dlg._icon_stack.get_visible_child_name(), "error")
+            err_dlg._on_close_clicked()
+            self.assertIn("Task failed hard", error_captured)
+
             win.close()
 
 
