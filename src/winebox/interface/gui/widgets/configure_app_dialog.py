@@ -221,11 +221,16 @@ class ConfigureAppDialog(Adw.Dialog):
             self._mount_group.add(row)
             self._mount_rows.append(row)
 
+    def _show_toast(self, message: str, timeout: int = 3) -> None:
+        toast = Adw.Toast.new(message)
+        toast.set_timeout(timeout)
+        self._toast_overlay.add_toast(toast)
+
     def _on_add_env(self, *_args: object) -> None:
         key = self._env_key_entry.get_text().strip()
         val = self._env_val_entry.get_text().strip()
         if not key:
-            self._toast_overlay.add_toast(Adw.Toast.new("Environment key cannot be empty"))
+            self._show_toast("Environment key cannot be empty")
             return
         self._env_vars[key] = val
         self._env_key_entry.set_text("")
@@ -240,7 +245,7 @@ class ConfigureAppDialog(Adw.Dialog):
         host_raw = self._mount_host_entry.get_text().strip()
         sandbox_raw = self._mount_sandbox_entry.get_text().strip()
         if not host_raw or not sandbox_raw:
-            self._toast_overlay.add_toast(Adw.Toast.new("Host path and sandbox path are required"))
+            self._show_toast("Host path and sandbox path are required")
             return
         mode = MountMode.RO if self._mount_ro_switch.get_active() else MountMode.RW
         self._host_mounts.append(HostMount(host_path=Path(host_raw), sandbox_path=Path(sandbox_raw), mode=mode))
@@ -372,7 +377,7 @@ class ConfigureAppDialog(Adw.Dialog):
         try:
             parsed_args = shlex.split(args_raw) if args_raw else []
         except ValueError as e:
-            self._toast_overlay.add_toast(Adw.Toast.new(f"Invalid arguments syntax: {e}"))
+            self._show_toast(f"Invalid arguments syntax: {e}")
             return
 
         r_idx = self._runner_row.get_selected()
@@ -425,4 +430,4 @@ class ConfigureAppDialog(Adw.Dialog):
             self._on_saved(f"Updated '{updated.name}'")
             self.close()
         except Exception as e:
-            self._toast_overlay.add_toast(Adw.Toast.new(f"Save failed: {e}"))
+            self._show_toast(f"Save failed: {e}")

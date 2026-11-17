@@ -108,8 +108,10 @@ class WineboxMainWindow(Adw.ApplicationWindow):
         if hasattr(prefixes_page, "select_prefix"):
             prefixes_page.select_prefix(prefix_id)
 
-    def show_toast(self, message: str) -> None:
-        self.toast_overlay.add_toast(Adw.Toast.new(message))
+    def show_toast(self, message: str, timeout: int = 3) -> None:
+        toast = Adw.Toast.new(message)
+        toast.set_timeout(timeout)
+        self.toast_overlay.add_toast(toast)
 
     def refresh_all(self) -> None:
         for page in self.pages.values():
