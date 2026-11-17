@@ -319,6 +319,7 @@ class TestGuiCliAndApp(unittest.TestCase):
 
             self.assertIn("Backup", action_labels)
             self.assertIn("Restore", action_labels)
+            self.assertIn("Logs", action_labels)
 
             # Test custom path backup
             custom_backup = root / "custom_backup.tar.gz"
@@ -327,6 +328,27 @@ class TestGuiCliAndApp(unittest.TestCase):
 
             # Test restore dialog prompt instantiation
             pfx_page._confirm_restore("pfx-bk", saved_path)
+
+            # Test LogViewerDialog instantiation and actions
+            from winebox.interface.gui.widgets.log_viewer_dialog import LogViewerDialog
+
+            recorded_logs = ["line 1", "line 2"]
+            cleared = []
+
+            dlg = LogViewerDialog(
+                prefix_id="pfx-bk",
+                lines=recorded_logs,
+                fetch_logs_fn=lambda _pid, _n: recorded_logs,
+                clear_logs_fn=lambda pid: cleared.append(pid),
+            )
+            self.assertEqual(dlg._prefix_id, "pfx-bk")
+            self.assertIn("line 1", dlg._last_content)
+
+            recorded_logs.append("line 3")
+            dlg.refresh_logs()
+            self.assertIn("line 3", dlg._last_content)
+
+            dlg._confirm_clear_logs()
             win.close()
 
 

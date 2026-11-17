@@ -43,6 +43,9 @@ class BwrapAdapter:
         inherit_stdio: bool = True,
         timeout: Optional[float] = None,
         check: bool = False,
+        stream_log_file: Optional[Path] = None,
+        log_header: Optional[str] = None,
+        log_footer: Optional[str] = None,
     ) -> subprocess.CompletedProcess:
         """Executes a command inside the Bubblewrap sandbox."""
         self.verify_ready()
@@ -54,6 +57,9 @@ class BwrapAdapter:
             command=full_command,
             inherit_stdio=inherit_stdio,
             timeout=timeout,
+            stream_log_file=stream_log_file,
+            log_header=log_header,
+            log_footer=log_footer,
         )
         if check and res.returncode != 0:
             err = res.stderr.strip() if res.stderr else f"Process exited with code {res.returncode}"

@@ -82,27 +82,24 @@ class ExecutionService:
                 runner=runner,
             )
 
+            log_file = self.log_manager.get_log_file(prefix.id, create_dir=True)
+            self.log_manager._rotate_if_needed(log_file)
+            log_header = f"[INFO] [APP] --- Application '{app.id}' Started (runner: {runner.id}) ---"
+            log_footer = f"[INFO] [APP] --- Application '{app.id}' Finished with Exit Code {{exit_code}} ---"
+
             try:
                 res = self.bwrap_adapter.execute_in_sandbox(
                     bwrap_args=bwrap_args,
                     command_inside=cmd_inside,
                     inherit_stdio=inherit_stdio,
+                    stream_log_file=log_file,
+                    log_header=log_header,
+                    log_footer=log_footer,
                 )
 
                 # Update telemetry in database
                 if hasattr(self.repo, "update_app_last_run"):
                     self.repo.update_app_last_run(app_id=app.id, exit_code=res.returncode)
-
-                # Log execution details to rotating log file
-                stdout_str = res.stdout if hasattr(res, "stdout") and res.stdout else ""
-                stderr_str = res.stderr if hasattr(res, "stderr") and res.stderr else ""
-                self.log_manager.log_execution(
-                    prefix_id=prefix.id,
-                    app_id=app.id,
-                    stdout=stdout_str,
-                    stderr=stderr_str,
-                    exit_code=res.returncode,
-                )
 
                 return res
             finally:

@@ -198,8 +198,14 @@ class LibraryPage(Gtk.Box):
             self._window.show_toast(f"Shortcut error: {e}")
 
     def _show_logs(self, prefix_id: str) -> None:
-        lines = self._window.services.prefix_lifecycle.read_logs(prefix_id, max_lines=100)
-        LogViewerDialog(prefix_id, lines).present(self._window)
+        lines = self._window.services.prefix_lifecycle.read_logs(prefix_id, max_lines=200)
+        dlg = LogViewerDialog(
+            prefix_id=prefix_id,
+            lines=lines,
+            fetch_logs_fn=self._window.services.prefix_lifecycle.read_logs,
+            clear_logs_fn=self._window.services.prefix_lifecycle.clear_logs,
+        )
+        dlg.present(self._window)
 
     def _confirm_remove_app(self, app_obj: Application) -> None:
         dlg = Adw.AlertDialog.new(

@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 from winebox.common.exceptions import WineboxError
 from winebox.domain.models import SecurityPolicy
 from winebox.infrastructure.bwrap_adapter import BwrapAdapter
+from winebox.infrastructure.log_manager import LogManager
 from winebox.infrastructure.process_manager import PrefixLock, ProcessManager, prefix_lock
 from winebox.infrastructure.sqlite_repository import SqliteRepository
 from winebox.infrastructure.wine_adapter import WineAdapter
@@ -26,6 +27,7 @@ class PrefixRuntimeService:
     ) -> None:
         self.repo = repo or SqliteRepository()
         self.bwrap_adapter = bwrap_adapter or BwrapAdapter()
+        self.log_manager = LogManager(prefixes_dir=self.repo.prefixes_dir)
 
     @staticmethod
     def ensure_prefix_idle(p_dir: Path, prefix_id: str) -> None:
@@ -62,7 +64,15 @@ class PrefixRuntimeService:
 
         if not pids_to_kill and not is_locked:
             PrefixAuditor.sanitize_dosdevices(prefix_inner)
+            self.log_manager.log_event(prefix_id, "Kill switch checked: no active processes running", level="INFO", category="KILL")
             return {"running": False, "killed_pids": []}
+
+        self.log_manager.log_event(
+            prefix_id,
+            f"Kill switch activated (force={force}, targeted_pids={pids_to_kill})",
+            level="WARN",
+            category="KILL",
+        )
 
         for pid in pids_to_kill:
             if ProcessManager.kill_pid(pid, timeout=1.0, force=force):
@@ -75,6 +85,12 @@ class PrefixRuntimeService:
             time.sleep(0.05)
 
         PrefixAuditor.sanitize_dosdevices(prefix_inner)
+        self.log_manager.log_event(
+            prefix_id,
+            f"Kill switch finished: terminated {len(killed_pids)} process(es) (killed_pids={killed_pids})",
+            level="INFO",
+            category="KILL",
+        )
         return {"running": True, "killed_pids": killed_pids}
 
     def run_tool(
@@ -100,6 +116,14 @@ class PrefixRuntimeService:
 
         policy = SecurityPolicy(display=True, audio=True, network=False, gpu=True, gamepad=False)
 
+        log_file = self.log_manager.get_log_file(prefix.id)
+        self.log_manager.log_event(
+            prefix_id,
+            f"Launching Wine tool '{cleaned_tool}' with args={args or []}",
+            level="INFO",
+            category="TOOL",
+        )
+
         with prefix_lock(p_dir):
             builder = MountBuilder(
                 prefix_path=prefix_inner,
@@ -117,16 +141,46 @@ class PrefixRuntimeService:
                     bwrap_args=bwrap_args,
                     command_inside=cmd,
                     inherit_stdio=inherit_stdio,
+                    stream_log_file=log_file,
+                    log_header=f"--- [TOOL] Starting Wine tool: {cleaned_tool} ---",
+                    log_footer=f"--- [TOOL] Wine tool exited ---",
                 )
                 if res.returncode in (-15, -9, 143, 137):
                     # Terminated via SIGTERM/SIGKILL (e.g. user clicked Kill)
+                    self.log_manager.log_event(
+                        prefix_id,
+                        f"Wine tool '{cleaned_tool}' terminated by signal {res.returncode}",
+                        level="WARN",
+                        category="TOOL",
+                    )
                     return res.returncode
                 if res.returncode != 0:
                     err_detail = res.stderr.strip() if res.stderr else ""
                     suffix = f": {err_detail}" if err_detail else ""
+                    self.log_manager.log_event(
+                        prefix_id,
+                        f"Wine tool '{cleaned_tool}' failed with exit code {res.returncode}{suffix}",
+                        level="ERROR",
+                        category="TOOL",
+                    )
                     raise WineboxError(
                         f"Wine tool '{cleaned_tool}' exited with code {res.returncode}{suffix}"
                     )
+                self.log_manager.log_event(
+                    prefix_id,
+                    f"Wine tool '{cleaned_tool}' finished successfully (exit code 0)",
+                    level="INFO",
+                    category="TOOL",
+                )
                 return res.returncode
+            except Exception as e:
+                if not isinstance(e, WineboxError):
+                    self.log_manager.log_event(
+                        prefix_id,
+                        f"Wine tool '{cleaned_tool}' execution error: {e}",
+                        level="ERROR",
+                        category="TOOL",
+                    )
+                raise
             finally:
                 PrefixAuditor.sanitize_dosdevices(prefix_inner)

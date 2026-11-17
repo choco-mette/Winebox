@@ -7,6 +7,7 @@ from gi.repository import Adw, Gio, Gtk
 from winebox.infrastructure.backup_adapter import BackupAdapter
 from winebox.infrastructure.process_manager import PrefixLock
 from winebox.interface.gui.state import run_async
+from winebox.interface.gui.widgets.log_viewer_dialog import LogViewerDialog
 from winebox.interface.gui.widgets.prefix_file_manager import PrefixFileManager
 
 
@@ -39,13 +40,14 @@ class PrefixesPage(Gtk.Box):
         header_box.append(new_btn)
         self.append(header_box)
 
-        # Action toolbar: Winecfg, Regedit, CMD, Audit, Backup, Restore, Kill
+        # Action toolbar: Winecfg, Regedit, CMD, Audit, Logs, Backup, Restore, Kill
         actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         for label, fn in (
             ("Winecfg", lambda: self._run_tool("winecfg")),
             ("Regedit", lambda: self._run_tool("regedit")),
             ("CMD", lambda: self._run_tool("cmd")),
             ("Audit", self._audit_prefix),
+            ("Logs", self._show_logs),
             ("Backup", self._backup_prefix),
             ("Restore", self._restore_prefix),
             ("Kill", self._kill_prefix),
@@ -238,6 +240,19 @@ class PrefixesPage(Gtk.Box):
             )
 
         dlg.connect("response", _on_resp)
+        dlg.present(self._window)
+
+    def _show_logs(self) -> None:
+        pid = self._selected_prefix_id()
+        if not pid:
+            return
+        lines = self._window.services.prefix_lifecycle.read_logs(pid, max_lines=200)
+        dlg = LogViewerDialog(
+            prefix_id=pid,
+            lines=lines,
+            fetch_logs_fn=self._window.services.prefix_lifecycle.read_logs,
+            clear_logs_fn=self._window.services.prefix_lifecycle.clear_logs,
+        )
         dlg.present(self._window)
 
     def _kill_prefix(self) -> None:

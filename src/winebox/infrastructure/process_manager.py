@@ -4,8 +4,11 @@ import fcntl
 import os
 import signal
 import subprocess
+import sys
+import threading
 import time
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Generator, List, Optional
 from winebox.common.exceptions import ExecutionError, PrefixLockError
@@ -95,14 +98,99 @@ def prefix_lock(prefix_root: Path) -> Generator[PrefixLock, None, None]:
 class ProcessManager:
     """Supervises, queries, and terminates processes."""
 
-    @staticmethod
+    @classmethod
     def run_process(
+        cls,
         command: List[str],
         cwd: Optional[Path] = None,
         env: Optional[dict] = None,
         inherit_stdio: bool = True,
         timeout: Optional[float] = None,
+        stream_log_file: Optional[Path] = None,
+        log_header: Optional[str] = None,
+        log_footer: Optional[str] = None,
     ) -> subprocess.CompletedProcess:
+        if stream_log_file is not None:
+            stream_log_file.parent.mkdir(parents=True, exist_ok=True)
+            log_f = open(stream_log_file, "a", encoding="utf-8", errors="replace")
+            try:
+                if log_header:
+                    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    log_f.write(f"[{now_str}] {log_header}\n")
+                    log_f.flush()
+
+                proc = subprocess.Popen(
+                    command,
+                    cwd=str(cwd) if cwd else None,
+                    env=env,
+                    stdin=None,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,
+                    errors="replace",
+                )
+
+                stdout_lines: List[str] = []
+                stderr_lines: List[str] = []
+
+                def _drain_stream(stream, sink_list, tag, tee_stream):
+                    for line in iter(stream.readline, ""):
+                        sink_list.append(line)
+                        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        log_f.write(f"[{now_str}] [{tag}] {line.rstrip()}\n")
+                        log_f.flush()
+                        if inherit_stdio and tee_stream:
+                            try:
+                                tee_stream.write(line)
+                                tee_stream.flush()
+                            except OSError:
+                                pass
+                    stream.close()
+
+                t_out = threading.Thread(
+                    target=_drain_stream,
+                    args=(proc.stdout, stdout_lines, "STDOUT", sys.stdout),
+                    daemon=True,
+                )
+                t_err = threading.Thread(
+                    target=_drain_stream,
+                    args=(proc.stderr, stderr_lines, "STDERR", sys.stderr),
+                    daemon=True,
+                )
+                t_out.start()
+                t_err.start()
+
+                try:
+                    rc = proc.wait(timeout=timeout)
+                except subprocess.TimeoutExpired as e:
+                    proc.kill()
+                    t_out.join(timeout=1.0)
+                    t_err.join(timeout=1.0)
+                    raise ExecutionError(f"Process timed out after {timeout} seconds") from e
+
+                t_out.join()
+                t_err.join()
+
+                if log_footer:
+                    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    footer_text = log_footer.replace("{exit_code}", str(rc))
+                    log_f.write(f"[{now_str}] {footer_text}\n")
+                    log_f.flush()
+
+                return subprocess.CompletedProcess(
+                    args=command,
+                    returncode=rc,
+                    stdout="".join(stdout_lines),
+                    stderr="".join(stderr_lines),
+                )
+            except Exception as e:
+                if not isinstance(e, ExecutionError):
+                    raise ExecutionError(f"Failed to execute process: {e}") from e
+                raise
+            finally:
+                log_f.close()
+
         try:
             return subprocess.run(
                 command,

@@ -10,6 +10,7 @@ from winebox.common.exceptions import ResourceNotFoundError, WineboxError
 from winebox.domain.models import Prefix, PrefixOrigin, PrefixStatus
 from winebox.infrastructure.backup_adapter import BackupAdapter
 from winebox.infrastructure.fs_adapter import FilesystemAdapter
+from winebox.infrastructure.log_manager import LogManager
 from winebox.infrastructure.process_manager import prefix_lock
 from winebox.infrastructure.sqlite_repository import SqliteRepository
 from winebox.security.auditor import PrefixAuditor
@@ -20,6 +21,7 @@ class PrefixBackupService:
 
     def __init__(self, repo: Optional[SqliteRepository] = None) -> None:
         self.repo = repo or SqliteRepository()
+        self.log_manager = LogManager(prefixes_dir=self.repo.prefixes_dir)
 
     def list_backups(self) -> List[Dict[str, Any]]:
         return BackupAdapter.list_backups(self.repo.data_root / "backups")
@@ -45,8 +47,21 @@ class PrefixBackupService:
             "backed_up_at": datetime.now(timezone.utc).isoformat(),
         }
 
-        with prefix_lock(p_dir):
-            return BackupAdapter.create_archive(p_dir, output_path, manifest)
+        self.log_manager.log_event(prefix.id, f"Creating backup snapshot...", level="INFO", category="BACKUP")
+        try:
+            with prefix_lock(p_dir):
+                result_path = BackupAdapter.create_archive(p_dir, output_path, manifest)
+                size_str = f"{result_path.stat().st_size} bytes"
+                self.log_manager.log_event(
+                    prefix.id,
+                    f"Backup saved successfully: '{result_path.name}' ({size_str})",
+                    level="INFO",
+                    category="BACKUP",
+                )
+                return result_path
+        except Exception as e:
+            self.log_manager.log_event(prefix.id, f"Backup failed: {e}", level="ERROR", category="BACKUP")
+            raise
 
     def restore_prefix(
         self,
@@ -55,6 +70,8 @@ class PrefixBackupService:
         force: bool = False,
     ) -> Prefix:
         """Safely validates, extracts, sanitizes, and registers a prefix from a backup archive."""
+        raw_id = target_prefix_id or archive_path.name.split("_")[0].split(".")[0]
+        final_id = raw_id.strip().lower().replace(" ", "-")
         staged_dir = self.repo.staging_dir / f"restore-{uuid.uuid4().hex[:8]}"
         try:
             manifest = BackupAdapter.extract_archive_safely(archive_path, staged_dir)
@@ -75,7 +92,11 @@ class PrefixBackupService:
             if dest_dir == prefixes_root or not dest_dir.is_relative_to(prefixes_root):
                 raise WineboxError(f"Invalid target prefix path for ID '{final_id}'.")
 
-            if dest_dir.exists():
+            prefix_already_exists = dest_dir.exists() and (
+                (dest_dir / "prefix").is_dir() or any(p for p in dest_dir.iterdir() if p.name != "logs")
+            )
+
+            if prefix_already_exists:
                 if not force:
                     raise WineboxError(
                         f"Prefix '{final_id}' already exists. Use --force to overwrite or --id to restore under a new ID."
@@ -91,8 +112,12 @@ class PrefixBackupService:
                     raise
                 FilesystemAdapter.remove_tree(backup_old)
             else:
+                if dest_dir.exists():
+                    FilesystemAdapter.remove_tree(dest_dir)
                 FilesystemAdapter.atomic_move(staged_dir, dest_dir)
-        except Exception:
+        except Exception as e:
+            if final_id and self.repo.get_prefix_dir(final_id).exists():
+                self.log_manager.log_event(final_id, f"Restore failed: {e}", level="ERROR", category="RESTORE")
             FilesystemAdapter.remove_tree(staged_dir)
             raise
 
@@ -118,4 +143,10 @@ class PrefixBackupService:
             status=PrefixStatus.READY,
         )
         self.repo.save_prefix(restored)
+        self.log_manager.log_event(
+            restored.id,
+            f"Restore completed successfully into prefix '{restored.id}'",
+            level="INFO",
+            category="RESTORE",
+        )
         return restored

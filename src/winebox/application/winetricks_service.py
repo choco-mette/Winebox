@@ -6,6 +6,7 @@ from typing import List, Optional
 from winebox.common.exceptions import WineboxError
 from winebox.domain.models import HostMount, MountMode, SecurityPolicy
 from winebox.infrastructure.bwrap_adapter import BwrapAdapter
+from winebox.infrastructure.log_manager import LogManager
 from winebox.infrastructure.process_manager import prefix_lock
 from winebox.infrastructure.sqlite_repository import SqliteRepository
 from winebox.infrastructure.winetricks_adapter import WinetricksAdapter
@@ -21,10 +22,12 @@ class WinetricksService:
         repo: Optional[SqliteRepository] = None,
         bwrap_adapter: Optional[BwrapAdapter] = None,
         adapter: Optional[WinetricksAdapter] = None,
+        log_manager: Optional[LogManager] = None,
     ) -> None:
         self.repo = repo or SqliteRepository()
         self.bwrap_adapter = bwrap_adapter or BwrapAdapter()
         self.adapter = adapter or WinetricksAdapter()
+        self.log_manager = log_manager or LogManager(prefixes_dir=self.repo.prefixes_dir)
 
         self.shared_cache_dir = self.repo.data_root / "cache" / "winetricks"
         self.shared_cache_dir.mkdir(parents=True, exist_ok=True)
@@ -60,6 +63,15 @@ class WinetricksService:
             host_mounts=[cache_mount],
         )
 
+        verbs_str = ", ".join(verbs) if verbs else "(GUI menu)"
+        self.log_manager.log_event(
+            prefix_id,
+            f"Starting Winetricks with verbs: {verbs_str}",
+            level="INFO",
+            category="WINETRICKS",
+        )
+        log_file = self.log_manager.get_log_file(prefix.id)
+
         with prefix_lock(p_dir):
             with prefix_lock(self.shared_cache_dir):
                 builder = MountBuilder(
@@ -81,10 +93,35 @@ class WinetricksService:
                         bwrap_args=bwrap_args,
                         command_inside=winetricks_cmd,
                         inherit_stdio=inherit_stdio,
+                        stream_log_file=log_file,
+                        log_header=f"--- [WINETRICKS] Starting Winetricks: {verbs_str} ---",
+                        log_footer=f"--- [WINETRICKS] Winetricks exited ---",
                     )
 
                     if res.returncode != 0:
+                        self.log_manager.log_event(
+                            prefix_id,
+                            f"Winetricks failed with exit code {res.returncode}",
+                            level="ERROR",
+                            category="WINETRICKS",
+                        )
                         raise WineboxError(f"Winetricks execution failed with exit code {res.returncode}")
+
+                    self.log_manager.log_event(
+                        prefix_id,
+                        f"Winetricks completed successfully: {verbs_str}",
+                        level="INFO",
+                        category="WINETRICKS",
+                    )
+                except Exception as e:
+                    if not isinstance(e, WineboxError):
+                        self.log_manager.log_event(
+                            prefix_id,
+                            f"Winetricks exception: {e}",
+                            level="ERROR",
+                            category="WINETRICKS",
+                        )
+                    raise
                 finally:
                     # Auto-sanitize prefix after winetricks finishes
                     PrefixAuditor.sanitize_dosdevices(prefix_inner)

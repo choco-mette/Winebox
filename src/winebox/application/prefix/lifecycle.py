@@ -96,8 +96,24 @@ class PrefixLifecycleService:
         if not p_dir.exists():
             raise WineboxError(f"Prefix '{prefix_id}' does not exist at {p_dir}")
         prefix_inner = p_dir / "prefix"
+        log_mgr = LogManager(prefixes_dir=self.repo.prefixes_dir)
         with prefix_lock(p_dir):
-            return PrefixAuditor.audit_prefix(prefix_inner, check_registry=False)
+            issues = PrefixAuditor.audit_prefix(prefix_inner, check_registry=False)
+            if issues:
+                log_mgr.log_event(
+                    prefix_id,
+                    f"Security audit detected {len(issues)} issue(s): {'; '.join(issues)}",
+                    level="WARN",
+                    category="AUDIT",
+                )
+            else:
+                log_mgr.log_event(
+                    prefix_id,
+                    "Security audit passed with zero issues",
+                    level="INFO",
+                    category="AUDIT",
+                )
+            return issues
 
     def remove_prefix(self, prefix_id: str) -> None:
         p_dir = self.repo.get_prefix_dir(prefix_id)
@@ -109,3 +125,7 @@ class PrefixLifecycleService:
     def read_logs(self, prefix_id: str, max_lines: int = 50) -> List[str]:
         log_mgr = LogManager(prefixes_dir=self.repo.prefixes_dir)
         return log_mgr.read_logs(prefix_id=prefix_id, max_lines=max_lines)
+
+    def clear_logs(self, prefix_id: str) -> None:
+        log_mgr = LogManager(prefixes_dir=self.repo.prefixes_dir)
+        log_mgr.clear_logs(prefix_id=prefix_id)
