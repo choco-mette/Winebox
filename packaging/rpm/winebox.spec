@@ -1,5 +1,5 @@
 Name:           winebox
-Version:        0.1.0
+Version:        0.1.1
 Release:        1%{?dist}
 Summary:        Sandboxed Wine orchestrator for Linux using Bubblewrap
 License:        MIT
