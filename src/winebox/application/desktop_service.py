@@ -103,11 +103,14 @@ class DesktopService:
     def create_desktop_entry(
         self,
         app_id: str,
+        name: Optional[str] = None,
         icon: Optional[str] = None,
         categories: Optional[str] = None,
     ) -> Path:
         """Create or update a Freedesktop .desktop entry for a registered application."""
         app = self.repo.load_app(app_id)
+        if name is not None and name.strip():
+            app.name = name.strip()
         if icon is not None:
             app.shortcut.icon = icon
         if categories is not None:

@@ -122,10 +122,31 @@ class TestGuiCliAndApp(unittest.TestCase):
                 app_obj=app_obj,
                 on_saved=lambda _msg: None,
             )
+            dlg.present(win)
             self.assertIsNotNone(dlg._stack.get_child_by_name("app"))
             self.assertIsNotNone(dlg._stack.get_child_by_name("sandbox"))
             self.assertIsNotNone(dlg._stack.get_child_by_name("system"))
             self.assertIsNotNone(dlg._stack.get_child_by_name("shortcut"))
+
+            # Test shortcut tab rename field & bidirectional sync
+            self.assertEqual(dlg._sc_name_row.get_text(), app_obj.name)
+            dlg._sc_name_row.set_text("GUI Renamed App")
+            self.assertEqual(dlg._name_row.get_text(), "GUI Renamed App")
+
+            dlg._name_row.set_text("GUI App Final Name")
+            self.assertEqual(dlg._sc_name_row.get_text(), "GUI App Final Name")
+
+            saved_messages = []
+            dlg._on_saved = lambda msg: saved_messages.append(msg)
+            dlg._on_save_clicked()
+            self.assertTrue(any("GUI App Final Name" in m for m in saved_messages))
+            reloaded_app = services.app_svc.get_app("demo-app")
+            self.assertEqual(reloaded_app.name, "GUI App Final Name")
+
+            # Test library page prompt rename app
+            lib_page = win.pages["library"]
+            lib_page._prompt_rename_app(reloaded_app)
+
             win.open_prefix_files("pfx-gui")
             win.close()
 

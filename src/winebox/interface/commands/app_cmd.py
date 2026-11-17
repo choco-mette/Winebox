@@ -142,6 +142,7 @@ def app_remove(
 @app_app.command("desktop")
 def app_desktop(
     app_id: str = typer.Argument(..., help="Application ID to create/remove desktop shortcut for"),
+    name: Optional[str] = typer.Option(None, "--name", "-n", help="Rename application and shortcut display name"),
     icon: Optional[str] = typer.Option(None, "--icon", help="Path to icon file (.png/.svg/.ico) or icon name"),
     categories: Optional[str] = typer.Option("Game;Utility;", "--categories", help="XDG Categories separated by semicolons"),
     remove: bool = typer.Option(False, "--remove", "-r", help="Remove the desktop shortcut"),
@@ -156,7 +157,7 @@ def app_desktop(
             else:
                 console.print(f"[yellow]No desktop shortcut found for '{app_id}'.[/yellow]")
         else:
-            path = svc.create_desktop_entry(app_id, icon=icon, categories=categories)
+            path = svc.create_desktop_entry(app_id, name=name, icon=icon, categories=categories)
             console.print(f"[bold green]✓[/bold green] Desktop shortcut created: [cyan]{path}[/cyan]")
     except WineboxError as e:
         console.print(f"[bold red]Error:[/bold red] {e}")

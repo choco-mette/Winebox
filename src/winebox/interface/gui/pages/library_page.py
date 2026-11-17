@@ -114,6 +114,7 @@ class LibraryPage(Gtk.Box):
         shortcut_label = "Remove Desktop Shortcut" if has_shortcut else "Create Desktop Shortcut"
 
         actions = (
+            ("Rename Application", lambda: self._prompt_rename_app(app_obj), False),
             ("View Logs", lambda: self._show_logs(app_obj.prefix_id), False),
             ("Open Prefix Files", lambda: self._window.open_prefix_files(app_obj.prefix_id), False),
             ("Winecfg", lambda: self._run_wine_tool(app_obj.prefix_id, "winecfg", app_obj.runner_id), False),
@@ -205,6 +206,32 @@ class LibraryPage(Gtk.Box):
             fetch_logs_fn=self._window.services.prefix_lifecycle.read_logs,
             clear_logs_fn=self._window.services.prefix_lifecycle.clear_logs,
         )
+        dlg.present(self._window)
+
+    def _prompt_rename_app(self, app_obj: Application) -> None:
+        dlg = Adw.AlertDialog.new("Rename Application", f"Enter a new display name for '{app_obj.name}':")
+        entry = Gtk.Entry(text=app_obj.name)
+        dlg.set_extra_child(entry)
+        dlg.add_response("cancel", "Cancel")
+        dlg.add_response("rename", "Rename")
+        dlg.set_response_appearance("rename", Adw.ResponseAppearance.SUGGESTED)
+
+        def _on_resp(_d: Adw.AlertDialog, resp: str) -> None:
+            if resp != "rename":
+                return
+            new_name = entry.get_text().strip()
+            if not new_name:
+                self._window.show_toast("Name cannot be empty")
+                return
+            try:
+                self._window.services.app_svc.update_app(app_obj.id, name=new_name)
+                self._window.services.desktop_svc.sync_shortcuts(app_obj.id)
+                self._window.show_toast(f"Renamed to '{new_name}'")
+                self.refresh()
+            except Exception as e:
+                self._window.show_toast(f"Rename failed: {e}")
+
+        dlg.connect("response", _on_resp)
         dlg.present(self._window)
 
     def _confirm_remove_app(self, app_obj: Application) -> None:

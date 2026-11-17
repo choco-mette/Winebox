@@ -322,6 +322,23 @@ class ConfigureAppDialog(Adw.Dialog):
             title="Appearance and Launch",
             description="Persisted in SQLite and synced to generated .desktop files on Save.",
         )
+        self._sc_name_row = Adw.EntryRow(title="Application / Shortcut Name")
+        self._sc_name_row.set_text(self._app.name)
+        meta_group.add(self._sc_name_row)
+
+        def _sync_sc_name(*_args: object) -> None:
+            txt = self._sc_name_row.get_text()
+            if self._name_row.get_text() != txt:
+                self._name_row.set_text(txt)
+
+        def _sync_app_name(*_args: object) -> None:
+            txt = self._name_row.get_text()
+            if self._sc_name_row.get_text() != txt:
+                self._sc_name_row.set_text(txt)
+
+        self._sc_name_row.connect("notify::text", _sync_sc_name)
+        self._name_row.connect("notify::text", _sync_app_name)
+
         self._sc_icon_row = Adw.EntryRow(title="Icon (theme name or image path)")
         self._sc_icon_row.set_text(sc.icon)
         icon_btn = Gtk.Button(label="Browse...")
@@ -373,6 +390,11 @@ class ConfigureAppDialog(Adw.Dialog):
         dlg.open(self._parent, None, _on_chosen)
 
     def _on_save_clicked(self, *_args: object) -> None:
+        app_name = (self._name_row.get_text() or self._sc_name_row.get_text()).strip()
+        if not app_name:
+            self._show_toast("Application name cannot be empty")
+            return
+
         args_raw = self._args_row.get_text().strip()
         try:
             parsed_args = shlex.split(args_raw) if args_raw else []
@@ -418,7 +440,7 @@ class ConfigureAppDialog(Adw.Dialog):
         try:
             updated = self._services.app_svc.update_app(
                 self._app.id,
-                name=self._name_row.get_text(),
+                name=app_name,
                 exe_path=self._exe_row.get_text(),
                 runner_id=runner_id,
                 profile_id=profile_id,

@@ -92,6 +92,14 @@ class TestDesktopIntegration(unittest.TestCase):
         self.assertIn("Name=Doom Eternal", content)
         self.assertIn("Icon=wine", content)
 
+        # Test rename via create_desktop_entry
+        desktop_renamed = svc.create_desktop_entry("doom", name="Doom Ancient Gods")
+        self.assertTrue(desktop_renamed.exists())
+        reloaded_app = self.repo.load_app("doom")
+        self.assertEqual(reloaded_app.name, "Doom Ancient Gods")
+        content_renamed = desktop_renamed.read_text(encoding="utf-8")
+        self.assertIn("Name=Doom Ancient Gods", content_renamed)
+
         # Remove
         self.assertTrue(svc.remove_desktop_entry("doom"))
         self.assertFalse(svc.desktop_entry_exists("doom"))
